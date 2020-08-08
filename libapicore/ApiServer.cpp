@@ -1037,7 +1037,8 @@ Json::Value ApiConnection::getMinerStatDetailPerMiner(
     hwinfo["type"] =
         (minerDescriptor.type == DeviceTypeEnum::Gpu ?
                 "GPU" :
-                (minerDescriptor.type == DeviceTypeEnum::Accelerator ? "ACCELERATOR" : "CPU"));
+                (minerDescriptor.type == DeviceTypeEnum::Accelerator ? "ACCELERATOR" : 
+		   (minerDescriptor.type == DeviceTypeEnum::Fpga ? "FPGA" : "CPU")));
     ostringstream ss;
     ss << (minerDescriptor.clDetected ? minerDescriptor.clName : minerDescriptor.cuName) << " "
        << dev::getFormattedMemory((double)minerDescriptor.totalMemory);

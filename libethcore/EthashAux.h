@@ -45,6 +45,7 @@ struct EpochContext
     int lightNumItems;
     size_t lightSize;
     const ethash_hash512* lightCache;
+    ethash_hash256 seed;
     int dagNumItems;
     uint64_t dagSize;
 };

@@ -34,6 +34,9 @@
 #if ETH_ETHASHCPU
 #include <libethash-cpu/CPUMiner.h>
 #endif
+#if ETH_ETHASHSQRL
+#include <libethash-sqrl/SQRLMiner.h>
+#endif
 #include <libpoolprotocols/PoolManager.h>
 
 #if API_CORE
@@ -121,10 +124,11 @@ public:
         }
     }
 
+
     static void signalHandler(int sig)
     {
         dev::setThreadName("main");
-
+        static int intCnt = 0;
         switch (sig)
         {
 #if defined(__linux__) || defined(__APPLE__)
@@ -170,6 +174,8 @@ public:
             cnote << "Got interrupt ...";
             g_running = false;
             g_shouldstop.notify_all();
+	    intCnt++;
+	    if (intCnt == 3) exit(1);
             break;
         }
     }
@@ -235,6 +241,9 @@ public:
 #if ETH_ETHASHCPU
                     "cp",
 #endif
+#if ETH_ETHASHSQRL
+                    "sq",
+#endif 
 #if API_CORE
                     "api",
 #endif
@@ -304,7 +313,7 @@ public:
 
 #endif
 
-#if ETH_ETHASHCL || ETH_ETHASHCUDA || ETH_ETHASH_CPU
+#if ETH_ETHASHCL || ETH_ETHASHCUDA || ETH_ETHASHCPU || ETH_ETHASHSQRL
 
         app.add_flag("--list-devices", m_shouldListDevices, "");
 
@@ -349,6 +358,13 @@ public:
 
 #endif
 
+#if ETH_ETHASHSQRL
+
+        app.add_option("--sqrl-hosts,--sq-hosts", m_SQSettings.hosts, "");
+	app.add_option("--sqrl-core-clk,--cclk", m_SQSettings.targetClk, "")->check(CLI::Range(50,600));
+
+#endif
+
         app.add_flag("--noeval", m_FarmSettings.noEval, "");
 
         app.add_option("-L,--dag-load-mode", m_FarmSettings.dagLoadMode, "", true)->check(CLI::Range(1));
@@ -362,6 +378,11 @@ public:
         bool cpu_miner = false;
 #if ETH_ETHASHCPU
         app.add_flag("--cpu", cpu_miner, "");
+#endif
+
+	bool sqrl_miner = false;
+#if ETH_ETHASHSQRL
+        app.add_flag("--sqrl", sqrl_miner, "");
 #endif
         auto sim_opt = app.add_option("-Z,--simulation,-M,--benchmark", m_PoolSettings.benchmarkBlock, "", true);
 
@@ -408,6 +429,8 @@ public:
             m_minerType = MinerType::CUDA;
         else if (cpu_miner)
             m_minerType = MinerType::CPU;
+        else if (sqrl_miner)
+            m_minerType = MinerType::SQRL;
         else
             m_minerType = MinerType::Mixed;
 
@@ -516,6 +539,10 @@ public:
         if (m_minerType == MinerType::CPU)
             CPUMiner::enumDevices(m_DevicesCollection);
 #endif
+#if ETH_ETHASHSQRL
+        if (m_minerType == MinerType::SQRL)
+	    SQRLMiner::enumDevices(m_DevicesCollection, m_SQSettings);
+#endif
 
         // Can't proceed without any GPU
         if (!m_DevicesCollection.size())
@@ -599,6 +626,8 @@ public:
                 case DeviceTypeEnum::Accelerator:
                     cout << "Acc";
                     break;
+		case DeviceTypeEnum::Fpga:
+		    cout << "Fpga";
                 default:
                     break;
                 }
@@ -687,6 +716,21 @@ public:
             }
         }
 #endif
+#if ETH_ETHASHSQRL
+        if (m_SQSettings.devices.size() && (m_minerType == MinerType::SQRL))
+        {
+            for (auto index : m_SQSettings.devices)
+            {
+                if (index < m_DevicesCollection.size())
+                {
+                    auto it = m_DevicesCollection.begin();
+                    std::advance(it, index);
+                    it->second.subscriptionType = DeviceSubscriptionTypeEnum::Sqrl;
+                }
+            }
+        }
+
+#endif
 
 
         // Subscribe all detected devices
@@ -726,6 +770,16 @@ public:
             }
         }
 #endif
+#if ETH_ETHASHSQRL
+        if (!m_SQSettings.devices.size() &&
+            (m_minerType == MinerType::SQRL))
+        {
+            for (auto it = m_DevicesCollection.begin(); it != m_DevicesCollection.end(); it++)
+            {
+                it->second.subscriptionType = DeviceSubscriptionTypeEnum::Sqrl;
+            }
+        }
+#endif
         // Count of subscribed devices
         int subscribedDevices = 0;
         for (auto it = m_DevicesCollection.begin(); it != m_DevicesCollection.end(); it++)
@@ -749,7 +803,7 @@ public:
         signal(SIGTERM, MinerCLI::signalHandler);
 
         // Initialize Farm
-        new Farm(m_DevicesCollection, m_FarmSettings, m_CUSettings, m_CLSettings, m_CPSettings);
+        new Farm(m_DevicesCollection, m_FarmSettings, m_CUSettings, m_CLSettings, m_CPSettings, m_SQSettings);
 
         // Run Miner
         doMiner();
@@ -1266,6 +1320,7 @@ private:
     CLSettings m_CLSettings;          // Operating settings for CL Miners
     CUSettings m_CUSettings;          // Operating settings for CUDA Miners
     CPSettings m_CPSettings;          // Operating settings for CPU Miners
+    SQSettings m_SQSettings;          // Operating settings for SQRL Miners
 
     //// -- Pool manager related params
     //std::vector<std::shared_ptr<URI>> m_poolConns;

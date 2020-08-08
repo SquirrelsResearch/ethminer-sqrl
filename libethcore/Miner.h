@@ -44,7 +44,8 @@ enum class DeviceTypeEnum
     Unknown,
     Cpu,
     Gpu,
-    Accelerator
+    Accelerator,
+    Fpga
 };
 
 enum class DeviceSubscriptionTypeEnum
@@ -52,8 +53,8 @@ enum class DeviceSubscriptionTypeEnum
     None,
     OpenCL,
     Cuda,
-    Cpu
-
+    Cpu,
+    Sqrl
 };
 
 enum class MinerType
@@ -61,7 +62,8 @@ enum class MinerType
     Mixed,
     CL,
     CUDA,
-    CPU
+    CPU,
+    SQRL 
 };
 
 enum class HwMonitorInfoType
@@ -69,7 +71,8 @@ enum class HwMonitorInfoType
     UNKNOWN,
     NVIDIA,
     AMD,
-    CPU
+    CPU,
+    SQRL
 };
 
 enum class ClPlatformTypeEnum
@@ -117,6 +120,13 @@ struct CPSettings : public MinerSettings
 {
 };
 
+// Holds settings for CPU Miner
+struct SQSettings : public MinerSettings
+{
+   vector<string> hosts;
+   double targetClk;
+};
+
 struct SolutionAccountType
 {
     unsigned accepted = 0;
@@ -144,9 +154,9 @@ struct HwSensorsType
     double powerW = 0.0;
     string str()
     {
-        string _ret = to_string(tempC) + "C " + to_string(fanP) + "%";
+        string _ret = to_string(tempC) + "C " + to_string(fanP) + "MHz";
         if (powerW)
-            _ret.append(boost::str(boost::format("%f") % powerW));
+            _ret.append(boost::str(boost::format(" %0.2fV") % powerW));
         return _ret;
     };
 };
@@ -199,6 +209,11 @@ struct DeviceDescriptor
     unsigned int cuComputeMinor;
 
     int cpCpuNumer;   // For CPU
+
+    // For SQRL FPGAs
+    string sqHost;
+    unsigned int sqPort;
+    double targetClk;
 };
 
 struct HwMonitorInfo
@@ -380,6 +395,8 @@ public:
     HwMonitorInfo hwmonInfo() { return m_hwmoninfo; }
 
     void setHwmonDeviceIndex(int i) { m_hwmoninfo.deviceIndex = i; }
+
+    virtual void getTelemetry(unsigned int *tempC, unsigned int *fanprc, unsigned int *powerW);
 
     /**
      * @brief Kick an asleep miner.

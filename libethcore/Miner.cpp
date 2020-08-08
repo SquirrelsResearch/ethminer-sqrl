@@ -53,6 +53,13 @@ void Miner::setWork(WorkPackage const& _work)
     kick_miner();
 }
 
+void Miner::getTelemetry(unsigned int *tempC, unsigned int *fanprc, unsigned int *powerW)
+{
+    (*tempC)=0;
+    (*fanprc)=0;
+    (*powerW)=0;
+}
+
 void Miner::pause(MinerPauseEnum what) 
 {
     boost::mutex::scoped_lock l(x_pause);
