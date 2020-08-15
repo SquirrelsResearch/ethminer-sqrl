@@ -50,6 +50,9 @@ along with ethminer.  If not, see <http://www.gnu.org/licenses/>.
 /* linux */
 #elif defined(_WIN32)
 /* windows */
+#include <windows.h>
+#pragma comment (lib, "Ws2_32.lib")
+#pragma comment (lib, "Mswsock.lib")
 #else
 #error "Invalid OS configuration"
 #endif
