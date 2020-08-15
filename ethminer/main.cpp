@@ -362,6 +362,11 @@ public:
 
         app.add_option("--sqrl-hosts,--sq-hosts", m_SQSettings.hosts, "");
 	app.add_option("--sqrl-core-clk,--cclk", m_SQSettings.targetClk, "")->check(CLI::Range(50,600));
+	app.add_option("--sqrl-intensity-n,--sqin", m_SQSettings.intensityN,"Numerator of SQRL Intensity (0-255) - 0 disables rate control(Not Recommended)", 12)->check(CLI::Range(0,255));
+	app.add_option("--sqrl-intensity-d,--sqid", m_SQSettings.intensityD,"Denominator of SQRL Intensity (1-32)", 3)->check(CLI::Range(1,32));
+	app.add_option("--sqrl-patience,--sqp", m_SQSettings.patience, "Cycles to wait for on-chip network congestion to resolve itself before intervention - 0 disables(Not Recommended)", 1)->check(CLI::Range(0,255));
+	app.add_option("--sqrl-no-stalldetect", m_SQSettings.skipStallDetection,"");
+	app.add_option("--sqrl-work-delay", m_SQSettings.workDelay,"Time in microseconds to wait before checking work results", 50000)->check(CLI::Range(10000,1000000));
 
 #endif
 
@@ -797,10 +802,10 @@ public:
 
         // Signal traps
 #if defined(__linux__) || defined(__APPLE__)
-        signal(SIGSEGV, MinerCLI::signalHandler);
+        //signal(SIGSEGV, MinerCLI::signalHandler);
 #endif
-        signal(SIGINT, MinerCLI::signalHandler);
-        signal(SIGTERM, MinerCLI::signalHandler);
+        //signal(SIGINT, MinerCLI::signalHandler);
+        //signal(SIGTERM, MinerCLI::signalHandler);
 
         // Initialize Farm
         new Farm(m_DevicesCollection, m_FarmSettings, m_CUSettings, m_CLSettings, m_CPSettings, m_SQSettings);
@@ -855,6 +860,9 @@ public:
 #endif
 #if API_CORE
              << "api,"
+#endif
+#if ETH_ETHASHSQRL
+             << "sq,"
 #endif
              << "'misc','env'}" << endl
              << "                        Display help text about one of these contexts:" << endl
@@ -1018,6 +1026,23 @@ public:
                  << "                        If not set all available CPUs will be used" << endl
                  << endl;
         }
+
+	if (ctx == "sq")
+	{
+           cout << "SQRL Extended Options :" << endl
+		<< endl
+		<< "     These options control the mining parameters of SQRL FPGAs" << endl
+		<< endl
+		<< "     --sqrl-intensity-n    OnCycle intensity (1-255), 0 to disable rate limiting (DevOnly)" << endl
+		<< "     --sqrl-intensity-d    OffCycle intensity (1-32)" << endl
+		<< "     --sqrl-patience       Cycles to wait for on-chip network congestion to resolve" << endl
+		<< "                           Set to 0 to disable congestion relief mechanisms (DevOnly)" << endl
+		<< endl
+		<< "     --sqrl-no-stalldetect Disables automatic stall detection and recovery" << endl
+	        << "     --sqrl-work-delay     Time in microseconds to wait between checking for" << endl
+		<< "                           new solutions from the FPGA (10000-100000 typical)" << endl
+		<< endl;
+	}
 
         if (ctx == "misc")
         {

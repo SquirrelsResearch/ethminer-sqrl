@@ -865,7 +865,7 @@ bool SQRLMiner::initEpoch_internal()
     // Compute the reciprical, adjusted to ETH optimized modulo
     double reciprical = 1.0/(double)nItems * 0x1000000000000000ULL;
     uint32_t intR = (uint64_t)reciprical >> 4ULL;
-    err = SQRLAXIWrite(m_socket, intR, 0x50B0);
+    err = SQRLAXIWrite(m_socket, intR, 0x5088);
     if (err != 0) sqrllog << "Failed setting ethcore rnItems!";
 
     // Check for the existing DAG
@@ -1085,10 +1085,14 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
     err = SQRLAXIWrite(m_socket, nonceStartLow, 0x5064);
     if (err != 0) sqrllog << "Failed setting ethcore nonceStartLow";
 
-    // TEMPORARY - Set Keccak input rate / debug parameters
-    //uint32_t skipInterval = 7;
-    //uint32_t flags = ((skipInterval*8-1) << 16) | (1 << 0) | (1 << 0);
-    uint32_t flags = (1 << 6) | (1 << 8) | (1 << 0) | (24 << 24) | (159 << 16);
+    uint32_t flags = 0;
+    if (m_settings.patience != 0) {
+      flags |= (1 << 6) | ((m_settings.patience & 0xff) << 8); 
+    }
+    if (m_settings.intensityN != 0) {
+      flags |= (1 << 0) | ((m_settings.intensityN & 0xFF) << 24);
+      flags |= (((m_settings.intensityD & 0x3F)*8 -1) << 16);
+    }
     err = SQRLAXIWrite(m_socket, flags, 0x5080);
     if (err != 0) sqrllog << "Failed setting ethcore debugFlags";
  
@@ -1111,7 +1115,7 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
 
 	//   auto r = ethash::search(context, header, boundary, nonce, blocksize);
 	axiMutex.unlock();
-	usleep(10000); // Give a momment for solutions
+	usleep(m_settings.workDelay); // Give a momment for solutions
 	axiMutex.lock();
 	uint32_t value = 0;
 	bool nonceValid[4] = {false,false,false,false};
@@ -1143,20 +1147,25 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
 	   SQRLAXIRead(m_socket, &nonceLo, 0x5000+31*4);
 	   nonce[3] = ((((uint64_t)nonceHi) << 32ULL) | (uint64_t)nonceLo);
 	} else nonceValid[3] = false;
-	// Clear nonces
-	SQRLAXIWrite(m_socket, 0x00010000, 0x506c);
+	// Clear nonces if needed
+	if (nonceValid[0] || nonceValid[1] || nonceValid[2] || nonceValid[3]) {
+	  SQRLAXIWrite(m_socket, 0x00010000, 0x506c);
+	}
 
         // Get stall check parameters
 	uint32_t sCnt;
 	uint32_t tChkLo, tChkHi;
-        SQRLAXIRead(m_socket, &sCnt, 0x5084);
+	if (!m_settings.skipStallDetection) {
+          SQRLAXIRead(m_socket, &sCnt, 0x5084);
+	}
 	SQRLAXIRead(m_socket, &tChkLo, 0x5048);
 	SQRLAXIRead(m_socket, &tChkHi, 0x5044);
 	uint64_t tChks = ((uint64_t)tChkHi << 32) + tChkLo;
+	if (tChks < lastTChecks) tChkHi++; // Cheap rollover detection
 	uint64_t newTChks = tChks - lastTChecks;
 	lastTChecks = tChks; 
 	uint8_t shouldReset = 0;
-	if (sCnt == lastSCnt) {
+	if (!m_settings.skipStallDetection && (sCnt == lastSCnt)) {
           // Reset the core, re-init nonceStart 
 	  shouldReset = 1;
 	}
@@ -1217,7 +1226,7 @@ double SQRLMiner::setClock(double targetClk) {
   if (targetClk != -1.0) {
     // Make sure we backup mining parameters - clock unlock can reset these
     SQRLAXIRead(m_socket, &nItems, 0x5040);
-    SQRLAXIRead(m_socket, &rnItems, 0x50B0);
+    SQRLAXIRead(m_socket, &rnItems, 0x5088);
     // Ensure DAGGEN is powered on
     SQRLAXIRead(m_socket, &daggenPwrState, 0xB000);   
     SQRLAXIWrite(m_socket, 0xFFFFFFFF, 0xB000);   
@@ -1256,7 +1265,7 @@ double SQRLMiner::setClock(double targetClk) {
 
     // Make sure we restore the mining parameters 
     SQRLAXIWrite(m_socket, nItems, 0x5040);
-    SQRLAXIWrite(m_socket, rnItems, 0x50B0);
+    SQRLAXIWrite(m_socket, rnItems, 0x5088);
     SQRLAXIWrite(m_socket, daggenPwrState, 0xB000);
   }
   return currentClk;
