@@ -916,7 +916,11 @@ bool SQRLMiner::initEpoch_internal()
       uint32_t cstatus = 0;
       while ((cstatus&2) != 0x2) {
 	axiMutex.unlock();
+#ifdef _WIN32
+        Sleep(100);
+#else
         usleep(100000);
+#endif
 	axiMutex.lock();
         SQRLAXIRead(m_socket, &cstatus, 0x40BC);
       }
@@ -985,7 +989,11 @@ bool SQRLMiner::initEpoch_internal()
     uint8_t cnt = 0;
     while ((status&2) != 0x2) {
       axiMutex.unlock();
+#ifdef _WIN32
+      Sleep(100);
+#else
       usleep(100000);
+#endif
       axiMutex.lock();
       SQRLAXIRead(m_socket, &status, 0x4000);
       cnt++;
@@ -1118,7 +1126,11 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
 
 	//   auto r = ethash::search(context, header, boundary, nonce, blocksize);
 	axiMutex.unlock();
+#ifdef _WIN32
+	Sleep(m_settings.workDelay/1000); // Give a momment for solutions
+#else
 	usleep(m_settings.workDelay); // Give a momment for solutions
+#endif
 	axiMutex.lock();
 	uint32_t value = 0;
 	bool nonceValid[4] = {false,false,false,false};
@@ -1254,7 +1266,11 @@ double SQRLMiner::setClock(double targetClk) {
     // Reset to factory defaults
     SQRLAXIWrite(m_socket, 0x5, 0x825c);
     SQRLAXIWrite(m_socket, 0x1, 0x825c);
+#ifdef _WIN32
+    Sleep(10);
+#else
     usleep(10000);
+#endif
     SQRLAXIWrite(m_socket, 0xA, 0x8000);
   }
   if (targetClk != -1.0) {
