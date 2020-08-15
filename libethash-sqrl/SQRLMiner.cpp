@@ -142,7 +142,7 @@ static uint8_t SQRLAXIMakePacket(uint8_t * pkt, uint8_t cmd, uint8_t pseq, uint6
 }
 
 static uint8_t SQRLAXIDoTransaction(int fd, uint8_t * reqPkt, uint8_t * respPkt) {
-  ssize_t res = write(fd, reqPkt, 16);
+  int res = write(fd, reqPkt, 16);
   if (res != 16) {
     printf("SQRLAXI Write Failed: %zi\n", res);
     exit(1);
@@ -346,7 +346,7 @@ static uint8_t SQRLAXIWriteBurst(int fd, uint8_t * buf, uint32_t len, uint32_t a
     } while (falseCRC);
   }
   // Send all at once
-  ssize_t r  = write(fd, pktBuf, len*4);
+  int r  = write(fd, pktBuf, len*4);
   if (r != len*4) {
     printf("Write was short: %li vs %i\n", r, len*4);
   }
@@ -740,7 +740,9 @@ SQRLMiner::~SQRLMiner()
     // Close socket
     if (m_socket != 0) {
       sqrllog << "Disconnecting " << m_deviceDescriptor.name;
+#ifndef _WIN32
       shutdown(m_socket, SHUT_RDWR);
+#endif
       close(m_socket);
     }
 }
