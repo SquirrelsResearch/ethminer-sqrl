@@ -20,6 +20,7 @@ along with ethminer.  If not, see <http://www.gnu.org/licenses/>.
 #include <libdevcore/Worker.h>
 #include <libethcore/EthashAux.h>
 #include <libethcore/Miner.h>
+#include "SQRLAXI.h"
 
 #include <functional>
 
@@ -53,7 +54,7 @@ private:
     double getClock();
     double setClock(double targetClk);
     double m_lastClk = 0;
-    int m_socket = 0;
+    SQRLAXIRef m_axi = NULL;
     std::mutex axiMutex;
 };
 

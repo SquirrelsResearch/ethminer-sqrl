@@ -145,7 +145,11 @@ void * _SQRLAXIWorkThread(void * ctx) {
 		cc -= (16-waitSize);
 		waitSize = 0;
 		// Process waitPkt
-                printf("Got Response pkt: %02hhx, %02hhx", waitPkt[0], waitPkt[1]);
+                printf("Got Response pkt: %02hhx, %02hhx\n", waitPkt[0], waitPkt[1]);
+		for(int i=0; i < 16; i++) {
+                  printf("%02hhx", waitPkt[i]);
+		}
+		printf("\n");
 		// Check CRC
 		uint16_t crc = ModRTU_CRC(waitPkt, 14);
 		uint16_t pcrc = (((uint16_t)waitPkt[14] << 8) | waitPkt[15]);
@@ -157,12 +161,36 @@ void * _SQRLAXIWorkThread(void * ctx) {
                   // TODO - handle Interrupts
 		} else {
 		  // Lookup the packet in our queue...
-		  // TODO
+		  bool found = false;
+		  SQRLMutexLock(&self->wMutex);
+		  for(uint8_t ptr = self->wPktRd; ptr != self->wPktWr; ptr++) {
+                    if (waitPkt[0] == self->workPkts[ptr].rawReq[0] && waitPkt[1] == self->workPkts[ptr].rawReq[1]) {
+		      if (self->workPkts[ptr].respRcvd) {
+                        // Caller didn't care for a response, we cleanup here.
+	                if (ptr == self->wPktRd) {
+	                  // Advance through any recieved packets
+                          while((self->wPktRd != self->wPktWr) && (self->workPkts[self->wPktRd].respRcvd)) self->wPktRd++;
+	                }
+		      } else {
+			memcpy(self->workPkts[ptr].rawResp, waitPkt, 16);
+			self->workPkts[ptr].respRcvd = 1;
+			self->workPkts[ptr].respValid = (crc == pcrc);
+			self->workPkts[ptr].respTimedOut = 0;
+	                found=true;
+		      }
+                      break;
+		    } 
+		  }
+
+		  SQRLMutexUnlock(&self->wMutex);
+		  if (found) {
+		    // Alert callers
 #ifdef _WIN32
-                  WakeAllConditionVariable(&self->wCond);
+                    WakeAllConditionVariable(&self->wCond);
 #else
-                  pthread_cond_broadcast(&self->wCond);
+                    pthread_cond_broadcast(&self->wCond);
 #endif
+		  }
 		}
 
 	      }
@@ -217,6 +245,7 @@ SQRLAXIResult _SQRLAXIDoTransaction(SQRLAXIRef self, uint8_t * reqPkt, uint8_t *
   self->wPktWr++; // Auto-wrap to 
 
   // Send the full packet
+  printf("Sending Packet %02hhx %02hhx\n", reqPkt[0], reqPkt[1]);
   int bytesSent = 0;
   while (bytesSent < 16) {
     int sent = send(self->fd, reqPkt+bytesSent, (16-bytesSent), 0);
@@ -433,6 +462,7 @@ SQRLAXIResult SQRLAXIWriteBulk(SQRLAXIRef self, uint8_t * buf, uint32_t len, uin
   pktSlot = self->wPktWr;
   self->wPktWr++; // Auto-wrap to 
 
+  printf("Sending Bulk Header Packet %02hhx %02hhx\n", reqPkt[0], reqPkt[1]);
   int bytesSent = 0;
   while (bytesSent < 16) {
     int sent = send(self->fd, reqPkt+bytesSent, (16-bytesSent), 0);
@@ -499,6 +529,7 @@ SQRLAXIResult SQRLAXIWriteBulk(SQRLAXIRef self, uint8_t * buf, uint32_t len, uin
 #else
     pthread_cond_wait(&self->wCond, &self->wMutex);
 #endif
+    printf("Wokeup for bulk\n");
     // Check our pkt
     if (self->workPkts[pktSlot].respRcvd || self->workPkts[pktSlot].respTimedOut) {
       bool timedOut = self->workPkts[pktSlot].respTimedOut;
@@ -515,6 +546,7 @@ SQRLAXIResult SQRLAXIWriteBulk(SQRLAXIRef self, uint8_t * buf, uint32_t len, uin
     }
     SQRLMutexUnlock(&self->wMutex);
   }
+  printf("BulkDone\n");
 
   // Verify the response
   if ((respPkt[0] >> 6) != 0x0) return SQRLAXIResultFailed;
@@ -527,6 +559,7 @@ SQRLAXIResult SQRLAXIWriteBulk(SQRLAXIRef self, uint8_t * buf, uint32_t len, uin
   if (calcCRC != ourCRC) return SQRLAXIResultCRCFailed; 
 
   // CRC 32 passed, we're good
+  printf("BulkOk\n");
 
   return SQRLAXIResultOK;
 }
