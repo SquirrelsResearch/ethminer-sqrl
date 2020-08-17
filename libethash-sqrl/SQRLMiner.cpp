@@ -857,6 +857,9 @@ bool SQRLMiner::initEpoch_internal()
     SQRLAXIWrite(m_socket, 0x0, 0x506c);
     // Ensure DAGGEN is powered on
     SQRLAXIWrite(m_socket, 0xFFFFFFFF, 0xB000);
+    // Ensure DAGGEN reset
+    SQRLAXIWrite(m_socket, 0xFFFFFFFD, 0xB000);
+    SQRLAXIWrite(m_socket, 0xFFFFFFFF, 0xB000);
     // Stop DAGGEN
     SQRLAXIWrite(m_socket, 0x2, 0x4000);
 
