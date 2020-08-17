@@ -242,7 +242,7 @@ bool SQRLMiner::initEpoch_internal()
     err = SQRLAXIRead(m_axi, &dagStatusWord, 0x40B8);
     if (dagStatusWord >> 31) {
       sqrllog << "Current HW DAG is for Epoch " << (dagStatusWord & 0xFFFF);
-      if ((dagStatusWord & 0xFFFF) == (uint32_t)m_epochContext.epochNumber) {
+      if ( (dagStatusWord & 0xFFFF) == (uint32_t)m_epochContext.epochNumber) {
         sqrllog << "No DAG Generation is needed";
 	// Power off DAGGEN
 	SQRLAXIWrite(m_axi, 0x0, 0xB000, true);
@@ -610,7 +610,7 @@ double SQRLMiner::setClock(double targetClk) {
     SQRLAXIRead(m_axi, &rnItems, 0x5088);
     // Ensure DAGGEN is powered on
     SQRLAXIRead(m_axi, &daggenPwrState, 0xB000);   
-    SQRLAXIWrite(m_axi, 0xFFFFFFFF, 0xB000, false);   
+    SQRLAXIWrite(m_axi, 0xFFFFFFFF, 0xB000, true);   
   }
   if (targetClk > 0) {
     double desiredDiv = vco/targetClk;
@@ -621,23 +621,23 @@ double SQRLMiner::setClock(double targetClk) {
       sqrllog << "CoreClk would exceed limit"; 
     } else {
       uint32_t newDiv = ((uint8_t)desiredDiv) | ((uint16_t)((desiredDiv-floor(desiredDiv))*1000.0) << 8);
-      SQRLAXIWrite(m_axi, newDiv, 0x8208, false);
-      SQRLAXIWrite(m_axi, 0x7, 0x825c, false);
-      SQRLAXIWrite(m_axi, 0x3, 0x825c, false);
+      SQRLAXIWrite(m_axi, newDiv, 0x8208, true);
+      SQRLAXIWrite(m_axi, 0x7, 0x825c, true);
+      SQRLAXIWrite(m_axi, 0x3, 0x825c, true);
       currentClk = vco/desiredDiv;
       sqrllog << "Setting CoreClk to " << (int)currentClk;
     }
   } else if (targetClk < -1.0) {
     sqrllog << "Resetting CoreClk to Stock";
     // Reset to factory defaults
-    SQRLAXIWrite(m_axi, 0x5, 0x825c, false);
-    SQRLAXIWrite(m_axi, 0x1, 0x825c, false);
+    SQRLAXIWrite(m_axi, 0x5, 0x825c, true);
+    SQRLAXIWrite(m_axi, 0x1, 0x825c, true);
 #ifdef _WIN32
     Sleep(10);
 #else
     usleep(10000);
 #endif
-    SQRLAXIWrite(m_axi, 0xA, 0x8000, false);
+    SQRLAXIWrite(m_axi, 0xA, 0x8000, true);
   }
   if (targetClk != -1.0) {
     // Wait for locked
@@ -649,9 +649,9 @@ double SQRLMiner::setClock(double targetClk) {
     }
 
     // Make sure we restore the mining parameters 
-    SQRLAXIWrite(m_axi, nItems, 0x5040, false);
-    SQRLAXIWrite(m_axi, rnItems, 0x5088, false);
-    SQRLAXIWrite(m_axi, daggenPwrState, 0xB000, false);
+    SQRLAXIWrite(m_axi, nItems, 0x5040, true);
+    SQRLAXIWrite(m_axi, rnItems, 0x5088, true);
+    SQRLAXIWrite(m_axi, daggenPwrState, 0xB000, true);
   }
   return currentClk;
 }

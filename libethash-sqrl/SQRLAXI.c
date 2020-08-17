@@ -145,11 +145,11 @@ void * _SQRLAXIWorkThread(void * ctx) {
 		cc -= (16-waitSize);
 		waitSize = 0;
 		// Process waitPkt
-                printf("Got Response pkt: %02hhx, %02hhx\n", waitPkt[0], waitPkt[1]);
-		for(int i=0; i < 16; i++) {
-                  printf("%02hhx", waitPkt[i]);
-		}
-		printf("\n");
+                //printf("Got Response pkt: %02hhx, %02hhx\n", waitPkt[0], waitPkt[1]);
+		//for(int i=0; i < 16; i++) {
+                //  printf("%02hhx", waitPkt[i]);
+		//}
+		//printf("\n");
 		// Check CRC
 		uint16_t crc = ModRTU_CRC(waitPkt, 14);
 		uint16_t pcrc = (((uint16_t)waitPkt[14] << 8) | waitPkt[15]);
@@ -159,12 +159,14 @@ void * _SQRLAXIWorkThread(void * ctx) {
 		// Interrupt?
 		if ((waitPkt[0] & 0xF) == 0x7) {
                   // TODO - handle Interrupts
+		  printf("Got Interrupt!\n");
 		} else {
 		  // Lookup the packet in our queue...
 		  bool found = false;
 		  SQRLMutexLock(&self->wMutex);
 		  for(uint8_t ptr = self->wPktRd; ptr != self->wPktWr; ptr++) {
-                    if (waitPkt[0] == self->workPkts[ptr].rawReq[0] && waitPkt[1] == self->workPkts[ptr].rawReq[1]) {
+                    if (((waitPkt[0] & 0xF) == self->workPkts[ptr].rawReq[0]) && (waitPkt[1] == self->workPkts[ptr].rawReq[1])) {
+		      if ((waitPkt[0] >> 4) & 0x1) printf("AXI Req Buffer Overflow\n");
 		      if (self->workPkts[ptr].respRcvd) {
                         // Caller didn't care for a response, we cleanup here.
 	                if (ptr == self->wPktRd) {
@@ -245,7 +247,7 @@ SQRLAXIResult _SQRLAXIDoTransaction(SQRLAXIRef self, uint8_t * reqPkt, uint8_t *
   self->wPktWr++; // Auto-wrap to 
 
   // Send the full packet
-  printf("Sending Packet %02hhx %02hhx\n", reqPkt[0], reqPkt[1]);
+  //printf("Sending Packet %02hhx %02hhx\n", reqPkt[0], reqPkt[1]);
   int bytesSent = 0;
   while (bytesSent < 16) {
     int sent = send(self->fd, reqPkt+bytesSent, (16-bytesSent), 0);
@@ -463,7 +465,7 @@ SQRLAXIResult SQRLAXIWriteBulk(SQRLAXIRef self, uint8_t * buf, uint32_t len, uin
   pktSlot = self->wPktWr;
   self->wPktWr++; // Auto-wrap to 
 
-  printf("Sending Bulk Header Packet %02hhx %02hhx\n", reqPkt[0], reqPkt[1]);
+  //printf("Sending Bulk Header Packet %02hhx %02hhx\n", reqPkt[0], reqPkt[1]);
   int bytesSent = 0;
   while (bytesSent < 16) {
     int sent = send(self->fd, reqPkt+bytesSent, (16-bytesSent), 0);
@@ -490,7 +492,7 @@ SQRLAXIResult SQRLAXIWriteBulk(SQRLAXIRef self, uint8_t * buf, uint32_t len, uin
     // we need to do an endian swap here if we want
     // our bulk data to be accurately represented
     // ASKING to swap endian is actually not performing this swap
-    uint8_t * sdata = buf + (16*i);
+    uint8_t * sdata = buf + i;
     uint8_t swap[16];
     if (!swapEndian) {
       sdata = &(swap[0]);
@@ -530,7 +532,7 @@ SQRLAXIResult SQRLAXIWriteBulk(SQRLAXIRef self, uint8_t * buf, uint32_t len, uin
 #else
     pthread_cond_wait(&self->wCond, &self->wMutex);
 #endif
-    printf("Wokeup for bulk\n");
+    //printf("Wokeup for bulk\n");
     // Check our pkt
     if (self->workPkts[pktSlot].respRcvd || self->workPkts[pktSlot].respTimedOut) {
       bool timedOut = self->workPkts[pktSlot].respTimedOut;
@@ -547,7 +549,7 @@ SQRLAXIResult SQRLAXIWriteBulk(SQRLAXIRef self, uint8_t * buf, uint32_t len, uin
     }
     SQRLMutexUnlock(&self->wMutex);
   }
-  printf("BulkDone\n");
+  //printf("BulkDone\n");
 
   // Verify the response
   if ((respPkt[0] >> 6) != 0x0) return SQRLAXIResultFailed;
@@ -560,7 +562,7 @@ SQRLAXIResult SQRLAXIWriteBulk(SQRLAXIRef self, uint8_t * buf, uint32_t len, uin
   if (calcCRC != ourCRC) return SQRLAXIResultCRCFailed; 
 
   // CRC 32 passed, we're good
-  printf("BulkOk\n");
+  //printf("BulkOk\n");
 
   return SQRLAXIResultOK;
 }
@@ -575,14 +577,14 @@ SQRLAXIResult SQRLAXICDMAWriteBytes(SQRLAXIRef self, uint8_t *buffer, uint32_t l
   }
 
   // Soft reset core
-  SQRLAXIWrite(self, (1<<2), 0x120000, false);
+  SQRLAXIWrite(self, (1<<2), 0x120000, true);
 
   SQRLAXIResult res = SQRLAXIResultOK;
   // The CDMA source reg is always the same - write it once
-  if ((res = SQRLAXIWrite(self, 0x00000000, 0x120018,false)) != 0) {
+  if ((res = SQRLAXIWrite(self, 0x00000000, 0x120018,true)) != 0) {
     return res;
   }
-  if ((res = SQRLAXIWrite(self, 0x00000002, 0x12001C,false)) != 0) {
+  if ((res = SQRLAXIWrite(self, 0x00000002, 0x12001C,true)) != 0) {
     return res;
   }
 
@@ -604,15 +606,15 @@ SQRLAXIResult SQRLAXICDMAWriteBytes(SQRLAXIRef self, uint8_t *buffer, uint32_t l
     uint32_t low = (uint32_t)(destAddr+pos) & 0xFFFFFFFF;
     uint32_t high = (uint32_t)((destAddr+pos) >> 32ULL) & 0xFFFFFFFF;
     //printf("%08x %08x\n", low, high);
-    if ((res = SQRLAXIWrite(self, low, 0x120020, false)) != 0) {
+    if ((res = SQRLAXIWrite(self, low, 0x120020, true)) != 0) {
         return res;
     }
-    if ((res = SQRLAXIWrite(self, high, 0x120024, false)) != 0) {
+    if ((res = SQRLAXIWrite(self, high, 0x120024, true)) != 0) {
         return res;
     }
     // This triggers the transfer
     //printf("BTT %08x\n", bytesToSend);
-    if ((res = SQRLAXIWrite(self, bytesToSend, 0x120028, false)) != 0) {
+    if ((res = SQRLAXIWrite(self, bytesToSend, 0x120028, true)) != 0) {
       return res;
     }
     // Wait for completion! (TODO - could double buffer 32KB packets...)
@@ -657,14 +659,14 @@ SQRLAXIResult SQRLAXICDMAReadBytes(SQRLAXIRef self, uint8_t *buffer, uint32_t le
   }
 
   // Soft reset core
-  SQRLAXIWrite(self, (1<<2), 0x120000, false);
+  SQRLAXIWrite(self, (1<<2), 0x120000, true);
 
   SQRLAXIResult res = SQRLAXIResultOK;
   // The CDMA dest reg is always the same - write it once
-  if ((res = SQRLAXIWrite(self, 0x00000000, 0x120020, false)) != 0) {
+  if ((res = SQRLAXIWrite(self, 0x00000000, 0x120020, true)) != 0) {
     return res;
   }
-  if ((res = SQRLAXIWrite(self, 0x00000002, 0x120024, false)) != 0) {
+  if ((res = SQRLAXIWrite(self, 0x00000002, 0x120024, true)) != 0) {
     return res;
   }
 
@@ -674,14 +676,14 @@ SQRLAXIResult SQRLAXICDMAReadBytes(SQRLAXIRef self, uint8_t *buffer, uint32_t le
     uint32_t bytesToRead = (len-pos)>65536?65536:(len-pos);
 
     // Run CDMA Command - Setup Addresses
-    if ((res = SQRLAXIWrite(self, (srcAddr+pos) & 0xFFFFFFFF, 0x120018, false)) != 0) {
+    if ((res = SQRLAXIWrite(self, (srcAddr+pos) & 0xFFFFFFFF, 0x120018, true)) != 0) {
         return res;
     }
-    if ((res = SQRLAXIWrite(self, ((srcAddr+pos) >> 32ULL) & 0xFFFFFFFF, 0x12001C, false)) != 0) {
+    if ((res = SQRLAXIWrite(self, ((srcAddr+pos) >> 32ULL) & 0xFFFFFFFF, 0x12001C, true)) != 0) {
         return res;
     }
     // Write BTT to run transaction
-    if ((res = SQRLAXIWrite(self, bytesToRead, 0x120028, false)) != 0) {
+    if ((res = SQRLAXIWrite(self, bytesToRead, 0x120028, true)) != 0) {
       return res;
     }
 
@@ -742,7 +744,7 @@ SQRLAXIResult SQRLAXICDMACopyBytes(SQRLAXIRef self, uint64_t srcAddr, uint64_t d
   }
 
   // Soft reset core
-  SQRLAXIWrite(self, (1<<2), 0x120000, false);
+  SQRLAXIWrite(self, (1<<2), 0x120000, true);
 
   SQRLAXIResult res = SQRLAXIResultOK;
   // Operate in up to 8MB chunks (CDMA Maximum transfer size)
@@ -755,24 +757,24 @@ SQRLAXIResult SQRLAXICDMACopyBytes(SQRLAXIRef self, uint64_t srcAddr, uint64_t d
     uint32_t low = (uint32_t)(destAddr+pos) & 0xFFFFFFFF;
     uint32_t high = (uint32_t)((destAddr+pos) >> 32ULL) & 0xFFFFFFFF;
     //printf("Copy to %08x %08x\n", high, low);
-    if ((res = SQRLAXIWrite(self, low, 0x120020,false)) != 0) {
+    if ((res = SQRLAXIWrite(self, low, 0x120020,true)) != 0) {
         return res;
     }
-    if ((res = SQRLAXIWrite(self, high, 0x120024,false)) != 0) {
+    if ((res = SQRLAXIWrite(self, high, 0x120024,true)) != 0) {
         return res;
     }
     low = (uint32_t)(srcAddr+pos) & 0xFFFFFFFF;
     high = (uint32_t)((srcAddr+pos) >> 32ULL) & 0xFFFFFFFF;
     //printf("Copy from %08x %08x\n", high, low);
-    if ((res = SQRLAXIWrite(self, low, 0x120018,false)) != 0) {
+    if ((res = SQRLAXIWrite(self, low, 0x120018,true)) != 0) {
         return res;
     }
-    if ((res = SQRLAXIWrite(self, high, 0x12001c,false)) != 0) {
+    if ((res = SQRLAXIWrite(self, high, 0x12001c,true)) != 0) {
         return res;
     }
     // This triggers the transfer
     //printf("BTT %08x\n", bytesToSend);
-    if ((res = SQRLAXIWrite(self, bytesToSend, 0x120028,false)) != 0) {
+    if ((res = SQRLAXIWrite(self, bytesToSend, 0x120028,true)) != 0) {
       return res;
     }
     // Wait for completion! (TODO - could double buffer 32KB packets...)
@@ -798,7 +800,7 @@ SQRLAXIResult SQRLAXICDMACopyBytes(SQRLAXIRef self, uint64_t srcAddr, uint64_t d
       busy = (~(status >> 1) & 0x1);
       if (err) {
         // Soft reset core and abort
-        SQRLAXIWrite(self, (1<<2), 0x120000,false);
+        SQRLAXIWrite(self, (1<<2), 0x120000,true);
         return SQRLAXIResultFailed;
       }
     }
