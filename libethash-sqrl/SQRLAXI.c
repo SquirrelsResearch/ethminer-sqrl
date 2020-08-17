@@ -408,7 +408,7 @@ SQRLAXIResult SQRLAXIWrite(SQRLAXIRef self, uint32_t data, uint64_t address, boo
   // Do the transaction
   uint8_t reqPkt[16];
   uint8_t respPkt[16];
-  _SQRLAXIMakePacket(reqPkt, 0x02, self->seq++, address, 0xAAAAAAAA);
+  _SQRLAXIMakePacket(reqPkt, 0x02, self->seq++, address, data);
   SQRLAXIResult res = _SQRLAXIDoTransaction(self, reqPkt, (waitDone?respPkt:NULL));
   if (res == SQRLAXIResultOK) {
     // Valid packet
@@ -454,6 +454,7 @@ SQRLAXIResult SQRLAXIWriteBulk(SQRLAXIRef self, uint8_t * buf, uint32_t len, uin
   }
   // Place our work packet in the queue
   memcpy(&(self->workPkts[self->wPktWr].rawReq), reqPkt, 16); 
+  self->workPkts[self->wPktWr].rawReq[0] = 0x2; // Response doesn't have bulk flag
   memset(&(self->workPkts[self->wPktWr].rawResp), 0x0, 16);
   self->workPkts[self->wPktWr].reqSent=1;
   self->workPkts[self->wPktWr].respRcvd = (respPkt == NULL)?true:false; // Causes work loop to clear the packet on response
