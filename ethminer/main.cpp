@@ -362,11 +362,11 @@ public:
 
         app.add_option("--sqrl-hosts,--sq-hosts", m_SQSettings.hosts, "");
 	app.add_option("--sqrl-core-clk,--cclk", m_SQSettings.targetClk, "")->check(CLI::Range(50,600));
-	app.add_option("--sqrl-intensity-n,--sqin", m_SQSettings.intensityN,"Numerator of SQRL Intensity (0-255) - 0 disables rate control(Not Recommended)", 12)->check(CLI::Range(0,255));
-	app.add_option("--sqrl-intensity-d,--sqid", m_SQSettings.intensityD,"Denominator of SQRL Intensity (1-32)", 3)->check(CLI::Range(1,32));
-	app.add_option("--sqrl-patience,--sqp", m_SQSettings.patience, "Cycles to wait for on-chip network congestion to resolve itself before intervention - 0 disables(Not Recommended)", 1)->check(CLI::Range(0,255));
-	app.add_option("--sqrl-no-stalldetect", m_SQSettings.skipStallDetection,"");
-	app.add_option("--sqrl-work-delay", m_SQSettings.workDelay,"Time in microseconds to wait before checking work results", 50000)->check(CLI::Range(10000,1000000));
+	app.add_option("--sqrl-intensity-n,--sqin", m_SQSettings.intensityN,"Numerator of SQRL Intensity (0-255) - 0 disables rate control(Not Recommended)", true)->check(CLI::Range(0,255));
+	app.add_option("--sqrl-intensity-d,--sqid", m_SQSettings.intensityD,"Denominator of SQRL Intensity (1-32)", true)->check(CLI::Range(1,32));
+	app.add_option("--sqrl-patience,--sqp", m_SQSettings.patience, "Cycles to wait for on-chip network congestion to resolve itself before intervention - 0 disables(Not Recommended)", true)->check(CLI::Range(0,255));
+	app.add_option("--sqrl-no-stalldetect", m_SQSettings.skipStallDetection,"",true);
+	app.add_option("--sqrl-work-delay", m_SQSettings.workDelay,"Time in microseconds to wait before checking work results", true)->check(CLI::Range(10000,1000000));
 
 #endif
 

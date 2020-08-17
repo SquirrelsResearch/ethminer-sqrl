@@ -825,6 +825,12 @@ bool SQRLMiner::initDevice()
       } else {
         m_lastClk = getClock();
       }
+      // Print the settings
+      sqrllog << "WorkDelay: " << m_settings.workDelay;
+      sqrllog << "Patience: " << m_settings.patience;
+      sqrllog << "IntensityN: " << m_settings.intensityN;
+      sqrllog << "IntensityD: " << m_settings.intensityD;
+      sqrllog << "SkipStallDetect: " << m_settings.skipStallDetection;
     } else {
       sqrllog << m_deviceDescriptor.name << " Failed to Connect";
       m_socket = 0;

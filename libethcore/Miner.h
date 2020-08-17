@@ -125,11 +125,11 @@ struct SQSettings : public MinerSettings
 {
    vector<string> hosts;
    double targetClk;
-   unsigned intensityN;
-   unsigned intensityD;
-   unsigned patience;
-   bool skipStallDetection;
-   unsigned workDelay;
+   unsigned intensityN = 12;
+   unsigned intensityD  = 3;
+   unsigned patience = 1;
+   bool skipStallDetection = 1;
+   unsigned workDelay = 50000;
 };
 
 struct SolutionAccountType
