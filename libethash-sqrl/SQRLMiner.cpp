@@ -218,9 +218,6 @@ bool SQRLMiner::initEpoch_internal()
     SQRLAXIWrite(m_axi, 0x0, 0x506c, true);
     // Ensure DAGGEN is powered on
     SQRLAXIWrite(m_axi, 0xFFFFFFFF, 0xB000, true);
-    // Ensure DAGGEN reset
-    SQRLAXIWrite(m_axi, 0xFFFFFFFD, 0xB000, true);
-    SQRLAXIWrite(m_axi, 0xFFFFFFFF, 0xB000, true);
     // Stop DAGGEN
     SQRLAXIWrite(m_axi, 0x2, 0x4000, true);
 
@@ -252,6 +249,10 @@ bool SQRLMiner::initEpoch_internal()
 	return true;
       }
     }
+
+    // Ensure DAGGEN reset if we have to regenerate
+    SQRLAXIWrite(m_axi, 0xFFFFFFFD, 0xB000, true);
+    SQRLAXIWrite(m_axi, 0xFFFFFFFF, 0xB000, true);
 
     // Reset clock to defaults
     double curClk = getClock();
