@@ -476,7 +476,8 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
  
     // Esnure hashcore loads new, reset work
     SQRLAXIWrite(m_axi, 0x00000000, 0x506c, false);
-    SQRLAXIWrite(m_axi, 0x00010000, 0x506c, false);
+    // Bit 0 = enable nonces via interrupt instead of polling
+    SQRLAXIWrite(m_axi, 0x00010001, 0x506c, false);
 
     uint32_t lastSCnt = 0;
     uint64_t lastTChecks = 0;
@@ -493,45 +494,65 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
 
 	//   auto r = ethash::search(context, header, boundary, nonce, blocksize);
 	axiMutex.unlock();
-#ifdef _WIN32
-	Sleep(m_settings.workDelay/1000); // Give a momment for solutions
-#else
-	usleep(m_settings.workDelay); // Give a momment for solutions
-#endif
-	axiMutex.lock();
-	uint32_t value = 0;
+
 	bool nonceValid[4] = {false,false,false,false};
 	uint64_t nonce[4] = {0,0,0,0};
-	uint32_t nonceLo,nonceHi;
-	err = SQRLAXIRead(m_axi, &value, 0x506c);
-        if (err != 0) sqrllog << "Failed checking nonceFlags";
-	if ((value >> 15) & 0x1) {
-           nonceValid[0] = true;
-	   SQRLAXIRead(m_axi, &nonceHi, 0x5000+19*4);
-	   SQRLAXIRead(m_axi, &nonceLo, 0x5000+28*4);
-	   nonce[0] = ((((uint64_t)nonceHi) << 32ULL) | (uint64_t)nonceLo);
-	} else nonceValid[0] = false;
-	if ((value >> 14) & 0x1) {
-           nonceValid[1] = true;
-	   SQRLAXIRead(m_axi, &nonceHi, 0x5000+20*4);
-	   SQRLAXIRead(m_axi, &nonceLo, 0x5000+29*4);
-	   nonce[1] = ((((uint64_t)nonceHi) << 32ULL) | (uint64_t)nonceLo);
-	} else nonceValid[1] = false;
-	if ((value >> 13) & 0x1) {
-           nonceValid[2] = true;
-	   SQRLAXIRead(m_axi, &nonceHi, 0x5000+21*4);
-	   SQRLAXIRead(m_axi, &nonceLo, 0x5000+30*4);
-	   nonce[2] = ((((uint64_t)nonceHi) << 32ULL) | (uint64_t)nonceLo);
-	} else nonceValid[2] = false;
-	if ((value >> 12) & 0x1) {
-           nonceValid[3] = true;
-	   SQRLAXIRead(m_axi, &nonceHi, 0x5000+22*4);
-	   SQRLAXIRead(m_axi, &nonceLo, 0x5000+31*4);
-	   nonce[3] = ((((uint64_t)nonceHi) << 32ULL) | (uint64_t)nonceLo);
-	} else nonceValid[3] = false;
-	// Clear nonces if needed
-	if (nonceValid[0] || nonceValid[1] || nonceValid[2] || nonceValid[3]) {
-	  SQRLAXIWrite(m_axi, 0x00010000, 0x506c, false);
+
+	if (0/*Legacy Mode*/) {
+	  // LEGACY - polling based
+#ifdef _WIN32
+	  Sleep(m_settings.workDelay/1000); // Give a momment for solutions
+#else
+	  usleep(m_settings.workDelay); // Give a momment for solutions
+#endif
+	  axiMutex.lock();
+
+	  uint32_t value = 0;
+	  uint32_t nonceLo,nonceHi;
+	  err = SQRLAXIRead(m_axi, &value, 0x506c);
+          if (err != 0) sqrllog << "Failed checking nonceFlags";
+    	  if ((value >> 15) & 0x1) {
+            nonceValid[0] = true;
+	    SQRLAXIRead(m_axi, &nonceHi, 0x5000+19*4);
+	    SQRLAXIRead(m_axi, &nonceLo, 0x5000+28*4);
+	    nonce[0] = ((((uint64_t)nonceHi) << 32ULL) | (uint64_t)nonceLo);
+ 	  } else nonceValid[0] = false;
+	  if ((value >> 14) & 0x1) {
+            nonceValid[1] = true;
+	    SQRLAXIRead(m_axi, &nonceHi, 0x5000+20*4);
+	    SQRLAXIRead(m_axi, &nonceLo, 0x5000+29*4);
+	    nonce[1] = ((((uint64_t)nonceHi) << 32ULL) | (uint64_t)nonceLo);
+	  } else nonceValid[1] = false;
+	  if ((value >> 13) & 0x1) {
+            nonceValid[2] = true;
+	    SQRLAXIRead(m_axi, &nonceHi, 0x5000+21*4);
+	    SQRLAXIRead(m_axi, &nonceLo, 0x5000+30*4);
+	    nonce[2] = ((((uint64_t)nonceHi) << 32ULL) | (uint64_t)nonceLo);
+	  } else nonceValid[2] = false;
+	  if ((value >> 12) & 0x1) {
+            nonceValid[3] = true;
+	    SQRLAXIRead(m_axi, &nonceHi, 0x5000+22*4);
+	    SQRLAXIRead(m_axi, &nonceLo, 0x5000+31*4);
+	    nonce[3] = ((((uint64_t)nonceHi) << 32ULL) | (uint64_t)nonceLo);
+	  } else nonceValid[3] = false;
+	  // Clear nonces if needed
+	  if (nonceValid[0] || nonceValid[1] || nonceValid[2] || nonceValid[3]) {
+	    SQRLAXIWrite(m_axi, 0x00010000, 0x506c, false);
+ 	  }
+        } else {
+          // Modern, interrupt
+	  uint64_t interruptNonce;
+          SQRLAXIResult axiRes = SQRLAXIWaitForInterrupt(m_axi, 0, &interruptNonce,m_settings.workDelay/1000);  	
+	  if (axiRes == SQRLAXIResultOK) {
+            nonceValid[0] = true;
+	    nonce[0] = interruptNonce;  
+	  } else if (axiRes == SQRLAXIResultTimedOut) {
+            // Normal
+	    nonceValid[0] = false;
+	  } else {
+	    sqrllog << EthRed << "FPGA Interrupt Error";
+  	  }
+	  axiMutex.lock();
 	}
 
         // Get stall check parameters

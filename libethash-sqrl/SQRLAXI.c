@@ -86,7 +86,7 @@ typedef struct _SQRLAXI {
   SQRLAXIPkt workPkts[256];
   uint8_t iPktWr;
   uint8_t iPktRd;
-  SQRLAXIPkt interruptPkts[256];
+  SQRLAXIPkt iPkts[256];
 
   sqrlthread_t wThread; 
 
@@ -160,6 +160,52 @@ void * _SQRLAXIWorkThread(void * ctx) {
 		if ((waitPkt[0] & 0xF) == 0x7) {
                   // TODO - handle Interrupts
 		  printf("Got Interrupt!\n");
+		  if (self->iseq != waitPkt[1]) {
+                    printf("Interupts missed - %i -> %i\n", self->iseq, waitPkt[1]);
+		  } 
+		  self->iseq = waitPkt[1]+1;
+		  SQRLMutexLock(&self->iMutex);
+                  if ((self->iPktWr + 1) == self->iPktRd) {
+                    printf("Interrupt Storm - suppressing queued interrupts until the weather clears\n");
+		    // TODO - for now, just clear the interrupt queue entirely if it is being ignored 
+		    self->iPktWr = 0;
+		    self->iPktRd = 0;
+		  } else {
+	            uint8_t interrupts = (waitPkt[0] >> 4);
+		    bool unhandled = false;
+		    for(int i=0; i < 4; i++) {
+                      if(interrupts & (1 << i)) {
+                        if(self->callbacks[i] == NULL) {
+		          unhandled = true;
+			} else {
+                          // Handle this interrupt callback
+			  uint64_t interruptData = (((uint64_t)waitPkt[2]) << 56ULL) |
+				                   (((uint64_t)waitPkt[3]) << 48ULL) |
+				                   (((uint64_t)waitPkt[4]) << 40ULL) |
+				                   (((uint64_t)waitPkt[5]) << 32ULL) |
+				                   (((uint64_t)waitPkt[6]) << 24ULL) |
+				                   (((uint64_t)waitPkt[7]) << 16ULL) |
+				                   (((uint64_t)waitPkt[8]) << 8ULL) |
+				                   (((uint64_t)waitPkt[9]) << 0ULL);
+			  self->callbacks[i](self, i, interruptData, self->contexts[i]); 
+			}
+		      }
+		    }
+                    // Copy the interrupt into the queue if unhandled
+		    if (unhandled) {
+                      memcpy(self->iPkts[self->iPktWr].rawResp, waitPkt, 16);
+
+		      self->iPkts[self->iPktWr].respTimedOut = 0;
+		      self->iPktWr++;
+		    // Alert callers
+#ifdef _WIN32
+                      WakeAllConditionVariable(&self->iCond);
+#else
+                      pthread_cond_broadcast(&self->iCond);
+#endif
+		    }
+		  }
+		  SQRLMutexUnlock(&self->iMutex);
 		} else {
 		  // Lookup the packet in our queue...
 		  bool found = false;
@@ -825,6 +871,56 @@ SQRLAXIResult SQRLAXIWaitForInterrupt(SQRLAXIRef self, uint8_t interrupt, uint64
   if (self->callbacks[interrupt] != NULL) return SQRLAXIResultFailed;
   if (self->fd == INVALID_SOCKET) return SQRLAXIResultNotConnected;
   // Wait for the specified interrupt to trigger
+  bool waited = false;
+  for(;;) {
+    SQRLMutexLock(&self->iMutex);
+    // Check queue
+    uint8_t ptr;
+    for(ptr=self->iPktRd; ptr != self->iPktWr; ptr++) {
+      if (self->iPkts[ptr].respRcvd) {
+	bool found = false;
+        if(self->iPkts[ptr].respValid) {
+          (*interruptData) =  (((uint64_t)self->iPkts[ptr].rawResp[2]) << 56ULL) |
+			      (((uint64_t)self->iPkts[ptr].rawResp[3]) << 48ULL) |
+			      (((uint64_t)self->iPkts[ptr].rawResp[4]) << 40ULL) |
+			      (((uint64_t)self->iPkts[ptr].rawResp[5]) << 32ULL) |
+			      (((uint64_t)self->iPkts[ptr].rawResp[6]) << 24ULL) |
+			      (((uint64_t)self->iPkts[ptr].rawResp[7]) << 16ULL) |
+			      (((uint64_t)self->iPkts[ptr].rawResp[8]) << 8ULL) |
+			      (((uint64_t)self->iPkts[ptr].rawResp[9]) << 0ULL);
+	  found = true;
+	}
+	if (ptr == self->iPktRd) {
+          self->iPktRd++;
+	}
+	if (found) {
+          SQRLMutexUnlock(&self->iMutex);
+	  return SQRLAXIResultOK;
+	}
+      }
+    }
+    if (waited) {
+      SQRLMutexUnlock(&self->iMutex);
+      break;
+    }
+    #ifdef _WIN32
+    SleepConditionVariableCS(&self->iCond, &self->iMutex, timeoutInMs);
+#else
+    struct timespec timeout;
+    timespec_get(&timeout, TIME_UTC);
+    time_t sec = (timeout.tv_sec + (timeoutInMs/1000));
+    long nsec = (timeout.tv_nsec + ((long)timeoutInMs*1000000ULL));
+    
+    timeout.tv_sec = (sec + (nsec/1000000000ULL));
+    timeout.tv_nsec = (nsec % 1000000000ULL); 
+    pthread_cond_timedwait(&self->iCond, &self->iMutex, &timeout);
+#endif
+    // Wait for wakeup
+    SQRLMutexUnlock(&self->iMutex);
+    // Check Timeout
+    waited = true;
+  }
+  return SQRLAXIResultTimedOut; 
 }
 
 uint16_t ModRTU_CRC(uint8_t * buf, int len)
