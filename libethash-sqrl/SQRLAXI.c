@@ -354,7 +354,7 @@ SQRLAXIRef SQRLAXICreate(SQRLAXIConnectionType connection, char * hostOrFTDISeri
   if (self) {
     self->fd = INVALID_SOCKET;
     self->port = port;
-    self->host = (hostOrFTDISerial?strdup(hostOrFTDISerial):NULL);
+    self->host = (hostOrFTDISerial?_strdup(hostOrFTDISerial):NULL);
     self->type = connection;
     self->callbacks[0] = NULL;
     self->callbacks[1] = NULL;
