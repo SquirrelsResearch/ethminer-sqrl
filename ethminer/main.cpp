@@ -365,8 +365,8 @@ public:
 	app.add_option("--sqrl-intensity-n,--sqin", m_SQSettings.intensityN,"Numerator of SQRL Intensity (0-255) - 0 disables rate control(Not Recommended)", true)->check(CLI::Range(0,255));
 	app.add_option("--sqrl-intensity-d,--sqid", m_SQSettings.intensityD,"Denominator of SQRL Intensity (1-32)", true)->check(CLI::Range(1,32));
 	app.add_option("--sqrl-patience,--sqp", m_SQSettings.patience, "Cycles to wait for on-chip network congestion to resolve itself before intervention - 0 disables(Not Recommended)", true)->check(CLI::Range(0,255));
-	app.add_option("--sqrl-no-stalldetect", m_SQSettings.skipStallDetection,"", true);
-	app.add_option("--sqrl-work-delay", m_SQSettings.workDelay,"Time in microseconds to wait before checking work results", true)->check(CLI::Range(10000,1000000));
+	app.add_option("--sqrl-no-stalldetect", m_SQSettings.skipStallDetection,"",true);
+	app.add_option("--sqrl-work-delay", m_SQSettings.workDelay,"Time in microseconds to wait before updating work results", true)->check(CLI::Range(10000,1000000));
 
 #ifdef _WIN32
 	WSADATA wsaData;
@@ -1043,8 +1043,8 @@ public:
 		<< "                           Set to 0 to disable congestion relief mechanisms (DevOnly)" << endl
 		<< endl
 		<< "     --sqrl-no-stalldetect Disables automatic stall detection and recovery" << endl
-	        << "     --sqrl-work-delay     Time in microseconds to wait between checking for" << endl
-		<< "                           new solutions from the FPGA (10000-100000 typical)" << endl
+	        << "     --sqrl-work-delay     Time in microseconds to wait between updating " << endl
+		<< "                           work results from the FPGA (10000-100000 typical)" << endl
 		<< endl;
 	}
 
