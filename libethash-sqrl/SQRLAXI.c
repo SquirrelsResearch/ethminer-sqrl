@@ -199,6 +199,7 @@ void * _SQRLAXIWorkThread(void * ctx) {
 	      // Save any remaining
 	      if (cc) {
                 memcpy(waitPkt+waitSize, wbuf, cc); 
+		waitSize += cc;
 	      }
 #ifdef _WIN32
   //uint8_t TCP_QUICKACK = 12;
