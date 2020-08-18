@@ -159,7 +159,7 @@ void * _SQRLAXIWorkThread(void * ctx) {
 		// Interrupt?
 		if ((waitPkt[0] & 0xF) == 0x7) {
                   // TODO - handle Interrupts
-		  printf("Got Interrupt!\n");
+		  //printf("Got Interrupt!\n");
 		  if (self->iseq != waitPkt[1]) {
                     printf("Interupts missed - %i -> %i\n", self->iseq, waitPkt[1]);
 		  } 
