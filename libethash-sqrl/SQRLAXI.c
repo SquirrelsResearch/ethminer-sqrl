@@ -34,6 +34,7 @@
 #elif defined(_WIN32)
 /* windows */
 #include <windows.h>
+#include <arpa/inet.h>
 #pragma comment (lib, "Ws2_32.lib")
 #pragma comment (lib, "Mswsock.lib")
 #else
