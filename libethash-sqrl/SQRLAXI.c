@@ -194,7 +194,8 @@ void * _SQRLAXIWorkThread(void * ctx) {
                     // Copy the interrupt into the queue if unhandled
 		    if (unhandled) {
                       memcpy(self->iPkts[self->iPktWr].rawResp, waitPkt, 16);
-
+                      self->iPkts[self->iPktWr].respRcvd = 1;
+		      self->iPkts[self->iPktWr].respValid = (crc == pcrc);
 		      self->iPkts[self->iPktWr].respTimedOut = 0;
 		      self->iPktWr++;
 		    // Alert callers
@@ -888,7 +889,7 @@ SQRLAXIResult SQRLAXIWaitForInterrupt(SQRLAXIRef self, uint8_t interrupt, uint64
 			      (((uint64_t)self->iPkts[ptr].rawResp[7]) << 16ULL) |
 			      (((uint64_t)self->iPkts[ptr].rawResp[8]) << 8ULL) |
 			      (((uint64_t)self->iPkts[ptr].rawResp[9]) << 0ULL);
-	  found = true;
+	  found = ((self->iPkts[ptr].rawResp[0] & (1 << (interrupt+4))) != 0);
 	}
 	if (ptr == self->iPktRd) {
           self->iPktRd++;
