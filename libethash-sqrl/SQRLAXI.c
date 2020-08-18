@@ -354,7 +354,11 @@ SQRLAXIRef SQRLAXICreate(SQRLAXIConnectionType connection, char * hostOrFTDISeri
   if (self) {
     self->fd = INVALID_SOCKET;
     self->port = port;
+#ifdef _WIN32
     self->host = (hostOrFTDISerial?_strdup(hostOrFTDISerial):NULL);
+#else
+    self->host = (hostOrFTDISerial?strdup(hostOrFTDISerial):NULL);
+#endif
     self->type = connection;
     self->callbacks[0] = NULL;
     self->callbacks[1] = NULL;
