@@ -130,6 +130,7 @@ struct SQSettings : public MinerSettings
    unsigned patience = 1;
    bool skipStallDetection = 1;
    unsigned workDelay = 50000;
+   unsigned fkVCCINT = 0; // 0 == no action
 };
 
 struct SolutionAccountType

@@ -367,6 +367,7 @@ public:
 	app.add_option("--sqrl-patience,--sqp", m_SQSettings.patience, "Cycles to wait for on-chip network congestion to resolve itself before intervention - 0 disables(Not Recommended)", true)->check(CLI::Range(0,255));
 	app.add_option("--sqrl-no-stalldetect", m_SQSettings.skipStallDetection,"",true);
 	app.add_option("--sqrl-work-delay", m_SQSettings.workDelay,"Time in microseconds to wait before updating work results", true)->check(CLI::Range(10000,1000000));
+	app.add_option("--sqrl-fk-vccint", m_SQSettings.fkVCCINT, "Voltage in millivolt to set FK VCCINT target to. Limit 0.75-0.90", true)->check(CLI::Range(0, 900));
 
 #ifdef _WIN32
 	WSADATA wsaData;

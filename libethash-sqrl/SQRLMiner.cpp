@@ -171,6 +171,31 @@ bool SQRLMiner::initDevice()
       s << setfill('0') << setw(8) << std::hex << bitstream;
       sqrllog << "Bitstream: " << s.str();
 
+      // Set voltage if asked
+      if (m_settings.fkVCCINT > 500) {
+	double r1           = 1.0 / (1.0 / 8.87 + 1.0 / 8.87); // R101 || R29
+        double r2           = 20.0; // R30
+	double rSeries      = 10.0; // R81
+	double rRheostatMax = 50.0; // +- 20%
+	uint8_t tWiper=0x44;
+	unsigned tmv=850;
+	for(uint8_t wiperCode=0; wiperCode < 0xFF; wiperCode++) {
+	  double r2Adj = 1.0 / ((1.0 / r2) + (1.0 / (rSeries + (rRheostatMax / 256.0 * (double)(wiperCode)))));
+	  double v = 0.6 * (1.0 + (r1 / r2Adj));
+	  if ((v * 1000) >= m_settings.fkVCCINT) {
+            tWiper = wiperCode;
+	    tmv = (v*1000);
+	  }
+	}
+        sqrllog << "Instructing FK VRM, if present, to target " << m_settings.fkVCCINT << "mv";
+        sqrllog << "Closest Viable Voltage " << tmv << "mv";
+        SQRLAXIWrite(m_axi, 0xA, 0x9040, true); 	
+        SQRLAXIWrite(m_axi, 0x158, 0x9108, true); 	
+        SQRLAXIWrite(m_axi, 0x00, 0x9108, true); 	
+        SQRLAXIWrite(m_axi, 0x200 | tWiper, 0x9108, true); 	
+        SQRLAXIWrite(m_axi, 0x1, 0x9100, true); 	
+      }
+
       // Initialize clk
       sqrllog << "Stock Clock: " << setClock(-2);
       if ( m_deviceDescriptor.targetClk != 0) {
