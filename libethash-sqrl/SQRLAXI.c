@@ -1,9 +1,6 @@
 #include "SQRLAXI.h"
 
 
-#ifndef INVALID_SOCKET
-#define INVALID_SOCKET 0
-#endif
 
 #include <stdio.h>
 #include <string.h>
@@ -34,11 +31,14 @@
 #elif defined(_WIN32)
 /* windows */
 #include <windows.h>
-#include <arpa/inet.h>
 #pragma comment (lib, "Ws2_32.lib")
 #pragma comment (lib, "Mswsock.lib")
 #else
 #error "Invalid OS configuration"
+#endif
+
+#ifndef INVALID_SOCKET
+#define INVALID_SOCKET 0
 #endif
 
 #ifdef _WIN32
@@ -70,7 +70,11 @@ typedef struct {
 
 typedef struct _SQRLAXI {
   SQRLAXIConnectionType type;
+#ifdef _WIN32
+  SOCKET fd; // Network file descriptor
+#else
   int fd; // Network file descriptor
+#endif
   char * host;
   uint16_t port;
 
@@ -120,7 +124,7 @@ void * _SQRLAXIWorkThread(void * ctx) {
     FD_ZERO(&rfd);
     nfds = 0;
     FD_SET(self->fd, &rfd);
-    nfds = self->fd+1;
+    nfds = (int)(self->fd)+1;
     
     #ifdef _WIN32
         struct timeval timeout;
@@ -800,7 +804,7 @@ SQRLAXIResult SQRLAXICDMACopyBytes(SQRLAXIRef self, uint64_t srcAddr, uint64_t d
   // Operate in up to 8MB chunks (CDMA Maximum transfer size)
   uint64_t pos = 0;
   while (pos < len) {
-    uint32_t bytesToSend = (len-pos)>(8*1024*1024)?(8*1024*1024):(len-pos);
+    uint32_t bytesToSend = (uint32_t)((len-pos)>(8*1024*1024)?(8*1024*1024):(len-pos));
 
     // Run CDMA Command - Setup Addresses
     //printf("Setting up write to %08x\n", (uint32_t)(destAddr+pos) & 0xFFFFFFFF);
