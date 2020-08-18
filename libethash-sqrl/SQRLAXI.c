@@ -123,9 +123,9 @@ void * _SQRLAXIWorkThread(void * ctx) {
     
     #ifdef _WIN32
         struct timeval timeout;
-        gettimeofday(&timeout, NULL);
+        //gettimeofday(&timeout, NULL);
         timeout.tv_sec = 0;
-        timeout.tv_usec = 0;
+        timeout.tv_usec = 100;
         n = select(nfds, &rfd, 0, 0, &timeout);
     #else
         struct timespec timeout;
@@ -270,6 +270,7 @@ void * _SQRLAXIWorkThread(void * ctx) {
           // TODO - any busy work
 	} else {
           printf("Select Error: %i\n", n);
+	  return NULL;
 	}
   }
   return NULL;
