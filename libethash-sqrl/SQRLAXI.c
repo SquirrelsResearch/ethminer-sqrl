@@ -605,13 +605,23 @@ SQRLAXIResult SQRLAXIWriteBulk(SQRLAXIRef self, uint8_t * buf, uint32_t len, uin
   SQRLMutexUnlock(&self->wMutex);
 
   // Wait for a response!
+  uint32_t timeoutInMs = 10;
+  uint8_t timeoutCount = 10;
   for(;;) {
     SQRLMutexLock(&self->wMutex);
 #ifdef _WIN32
-    SleepConditionVariableCS(&self->wCond, &self->wMutex, INFINITE);
+    SleepConditionVariableCS(&self->wCond, &self->wMutex, timeoutInMs);
 #else
-    pthread_cond_wait(&self->wCond, &self->wMutex);
+    struct timespec timeout;
+    timespec_get(&timeout, TIME_UTC);
+    time_t sec = (timeout.tv_sec + (timeoutInMs/1000));
+    long nsec = (timeout.tv_nsec + ((long)timeoutInMs*1000000ULL));
+   
+    timeout.tv_sec = (sec + (nsec/1000000000ULL));
+    timeout.tv_nsec = (nsec % 1000000000ULL); 
+    pthread_cond_timedwait(&self->wCond, &self->wMutex, &timeout);
 #endif
+    timeoutCount--;
     //printf("Wokeup for bulk\n");
     // Check our pkt
     if (self->workPkts[pktSlot].respRcvd || self->workPkts[pktSlot].respTimedOut) {
@@ -628,6 +638,18 @@ SQRLAXIResult SQRLAXIWriteBulk(SQRLAXIRef self, uint8_t * buf, uint32_t len, uin
       break;
     }
     SQRLMutexUnlock(&self->wMutex);
+    if(timeoutCount == 0) {
+      printf("AXI Timeout!\n");
+      SQRLMutexLock(&self->wMutex);
+      self->workPkts[pktSlot].respTimedOut = true;
+      self->workPkts[pktSlot].respRcvd = true;
+      if (pktSlot == self->wPktRd) {
+        // Advance through any recieved packets
+        while((self->wPktRd != self->wPktWr) && (self->workPkts[self->wPktRd].respRcvd)) self->wPktRd++;
+      }
+      SQRLMutexUnlock(&self->wMutex);
+      return SQRLAXIResultTimedOut;
+    }
   }
   //printf("BulkDone\n");
 
