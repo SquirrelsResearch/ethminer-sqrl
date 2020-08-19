@@ -130,12 +130,12 @@ void * _SQRLAXIWorkThread(void * ctx) {
         struct timeval timeout;
         //gettimeofday(&timeout, NULL);
         timeout.tv_sec = 0;
-        timeout.tv_usec = 100;
+        timeout.tv_usec = 10000;
         n = select(nfds, &rfd, 0, 0, &timeout);
     #else
         struct timespec timeout;
         timeout.tv_sec = 0;
-        timeout.tv_nsec = 100000; // 86805ns for 115200 baud actual byte rate
+        timeout.tv_nsec = 10000000; // 86805ns for 115200 baud actual byte rate
         n = pselect(nfds, &rfd, 0, 0, &timeout, 0);
     #endif
 	if (n > 0 || errno == EINTR)
@@ -323,13 +323,23 @@ SQRLAXIResult _SQRLAXIDoTransaction(SQRLAXIRef self, uint8_t * reqPkt, uint8_t *
 
   if (respPkt != NULL) {
     // Wait for a response!
+    uint32_t timeoutInMs = 10;
+    uint8_t timeoutCount = 10;
     for(;;) {
       SQRLMutexLock(&self->wMutex);
 #ifdef _WIN32
-      SleepConditionVariableCS(&self->wCond, &self->wMutex, INFINITE);
+      SleepConditionVariableCS(&self->wCond, &self->wMutex, timeoutInMs);
 #else
-      pthread_cond_wait(&self->wCond, &self->wMutex);
+      struct timespec timeout;
+      timespec_get(&timeout, TIME_UTC);
+      time_t sec = (timeout.tv_sec + (timeoutInMs/1000));
+      long nsec = (timeout.tv_nsec + ((long)timeoutInMs*1000000ULL));
+    
+      timeout.tv_sec = (sec + (nsec/1000000000ULL));
+      timeout.tv_nsec = (nsec % 1000000000ULL); 
+      pthread_cond_timedwait(&self->wCond, &self->wMutex, &timeout);
 #endif
+      timeoutCount--;
 
       // Check our pkt
       if (self->workPkts[pktSlot].respRcvd || self->workPkts[pktSlot].respTimedOut) {
@@ -346,6 +356,18 @@ SQRLAXIResult _SQRLAXIDoTransaction(SQRLAXIRef self, uint8_t * reqPkt, uint8_t *
 	break;
       }
       SQRLMutexUnlock(&self->wMutex);
+      if (timeoutCount == 0) {
+        printf("AXI Timeout!\n");
+	SQRLMutexLock(&self->wMutex);
+	self->workPkts[pktSlot].respTimedOut = true;
+	self->workPkts[pktSlot].respRcvd = true;
+	if (pktSlot == self->wPktRd) {
+	  // Advance through any recieved packets
+          while((self->wPktRd != self->wPktWr) && (self->workPkts[self->wPktRd].respRcvd)) self->wPktRd++;
+	}
+	SQRLMutexUnlock(&self->wMutex);
+	return SQRLAXIResultTimedOut;
+      }
     }
   }
 
