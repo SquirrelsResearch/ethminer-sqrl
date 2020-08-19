@@ -160,6 +160,12 @@ void * _SQRLAXIWorkThread(void * ctx) {
 		uint16_t pcrc = (((uint16_t)waitPkt[14] << 8) | waitPkt[15]);
 		if (crc != pcrc) {
                   printf("Bad CRC\n");
+		  // Remove the leading byte and try again
+		  waitSize = 15;
+		  for(int i=0; i < 15; i++) {
+                    waitPkt[i] = waitPkt[i+1];
+		  }
+		  continue;
 		}
 		// Interrupt?
 		if ((waitPkt[0] & 0xF) == 0x7) {
