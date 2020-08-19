@@ -497,7 +497,12 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
       flags |= (((m_settings.intensityD & 0x3F)*8 -1) << 16);
     }
     err = SQRLAXIWrite(m_axi, flags, 0x5080, false);
-    if (err != 0) sqrllog << "Failed setting ethcore debugFlags";
+    if (err != 0) {
+      sqrllog << "Failed setting ethcore debugFlags";
+      if(m_settings.dieOnError) {
+        exit(1);
+      }
+    }
  
     // Esnure hashcore loads new, reset work
     SQRLAXIWrite(m_axi, 0x00000000, 0x506c, false);
@@ -576,6 +581,9 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
 	    nonceValid[0] = false;
 	  } else {
 	    sqrllog << EthRed << "FPGA Interrupt Error";
+	    if(m_settings.dieOnError) {
+              exit(1);
+	    }
   	  }
 	  axiMutex.lock();
 	}

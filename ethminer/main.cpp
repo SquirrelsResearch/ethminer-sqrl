@@ -368,7 +368,7 @@ public:
 	app.add_option("--sqrl-no-stalldetect", m_SQSettings.skipStallDetection,"",true);
 	app.add_option("--sqrl-work-delay", m_SQSettings.workDelay,"Time in microseconds to wait before updating work results", true)->check(CLI::Range(10000,1000000));
 	app.add_option("--sqrl-fk-vccint", m_SQSettings.fkVCCINT, "Voltage in millivolt to set FK VCCINT target to. Limit 0.75-0.90", true)->check(CLI::Range(0, 900));
-
+        app.add_option("--sqrl-die-on-error", m_SQSettings.dieOnError, "Exit immediately on comm errors", true);
 #ifdef _WIN32
 	WSADATA wsaData;
         WSAStartup(MAKEWORD(2,2), &wsaData);
