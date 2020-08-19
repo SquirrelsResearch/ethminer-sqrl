@@ -323,7 +323,7 @@ SQRLAXIResult _SQRLAXIDoTransaction(SQRLAXIRef self, uint8_t * reqPkt, uint8_t *
 
   if (respPkt != NULL) {
     // Wait for a response!
-    uint32_t timeoutInMs = 10;
+    uint32_t timeoutInMs = 100;
     uint8_t timeoutCount = 10;
     for(;;) {
       SQRLMutexLock(&self->wMutex);
@@ -605,7 +605,7 @@ SQRLAXIResult SQRLAXIWriteBulk(SQRLAXIRef self, uint8_t * buf, uint32_t len, uin
   SQRLMutexUnlock(&self->wMutex);
 
   // Wait for a response!
-  uint32_t timeoutInMs = 10;
+  uint32_t timeoutInMs = 100;
   uint8_t timeoutCount = 10;
   for(;;) {
     SQRLMutexLock(&self->wMutex);

@@ -314,7 +314,10 @@ bool SQRLMiner::initEpoch_internal()
         usleep(100000);
 #endif
 	axiMutex.lock();
-        SQRLAXIRead(m_axi, &cstatus, 0x40BC);
+        err = SQRLAXIRead(m_axi, &cstatus, 0x40BC);
+        if((err != 0) && m_settings.dieOnError) {
+          exit(1);
+        }
       }
       auto cacheTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startCache);
       sqrllog << "Final LightCache Generation Status: " << cstatus;
@@ -382,14 +385,17 @@ bool SQRLMiner::initEpoch_internal()
     while ((status&2) != 0x2) {
       axiMutex.unlock();
 #ifdef _WIN32
-      Sleep(100);
+      Sleep(1000);
 #else
-      usleep(100000);
+      usleep(1000000);
 #endif
       axiMutex.lock();
-      SQRLAXIRead(m_axi, &status, 0x4000);
+      err = SQRLAXIRead(m_axi, &status, 0x4000);
+      if((err != 0) && m_settings.dieOnError) {
+        exit(1);
+      }
       cnt++;
-      if (cnt % 64 == 0) {
+      if (cnt % 5 == 0) {
 	uint32_t dagProgress = 0;
 	SQRLAXIRead(m_axi, &dagProgress, 0x4008);
 	double progress = (double)(mixer_size+leftover);
