@@ -809,8 +809,8 @@ public:
 #if defined(__linux__) || defined(__APPLE__)
         //signal(SIGSEGV, MinerCLI::signalHandler);
 #endif
-        //signal(SIGINT, MinerCLI::signalHandler);
-        //signal(SIGTERM, MinerCLI::signalHandler);
+        signal(SIGINT, MinerCLI::signalHandler);
+        signal(SIGTERM, MinerCLI::signalHandler);
 
         // Initialize Farm
         new Farm(m_DevicesCollection, m_FarmSettings, m_CUSettings, m_CLSettings, m_CPSettings, m_SQSettings);
