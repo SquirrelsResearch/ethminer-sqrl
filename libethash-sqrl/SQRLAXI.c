@@ -685,14 +685,14 @@ SQRLAXIResult SQRLAXICDMAWriteBytes(SQRLAXIRef self, uint8_t *buffer, uint32_t l
   }
 
   // Soft reset core
-  SQRLAXIWrite(self, (1<<2), 0x120000, true);
+  SQRLAXIWrite(self, (1<<2), 0x120000, false);
 
   SQRLAXIResult res = SQRLAXIResultOK;
   // The CDMA source reg is always the same - write it once
-  if ((res = SQRLAXIWrite(self, 0x00000000, 0x120018,true)) != 0) {
+  if ((res = SQRLAXIWrite(self, 0x00000000, 0x120018,false)) != 0) {
     return res;
   }
-  if ((res = SQRLAXIWrite(self, 0x00000002, 0x12001C,true)) != 0) {
+  if ((res = SQRLAXIWrite(self, 0x00000002, 0x12001C,false)) != 0) {
     return res;
   }
 
@@ -714,15 +714,15 @@ SQRLAXIResult SQRLAXICDMAWriteBytes(SQRLAXIRef self, uint8_t *buffer, uint32_t l
     uint32_t low = (uint32_t)(destAddr+pos) & 0xFFFFFFFF;
     uint32_t high = (uint32_t)((destAddr+pos) >> 32ULL) & 0xFFFFFFFF;
     //printf("%08x %08x\n", low, high);
-    if ((res = SQRLAXIWrite(self, low, 0x120020, true)) != 0) {
+    if ((res = SQRLAXIWrite(self, low, 0x120020, false)) != 0) {
         return res;
     }
-    if ((res = SQRLAXIWrite(self, high, 0x120024, true)) != 0) {
+    if ((res = SQRLAXIWrite(self, high, 0x120024, false)) != 0) {
         return res;
     }
     // This triggers the transfer
     //printf("BTT %08x\n", bytesToSend);
-    if ((res = SQRLAXIWrite(self, bytesToSend, 0x120028, true)) != 0) {
+    if ((res = SQRLAXIWrite(self, bytesToSend, 0x120028, false)) != 0) {
       return res;
     }
     // Wait for completion! (TODO - could double buffer 32KB packets...)
@@ -748,7 +748,7 @@ SQRLAXIResult SQRLAXICDMAWriteBytes(SQRLAXIRef self, uint8_t *buffer, uint32_t l
       busy = (~(status >> 1) & 0x1);
       if (err) {
         // Soft reset core and abort
-        SQRLAXIWrite(self, (1<<2), 0x120000, 0);
+        SQRLAXIWrite(self, (1<<2), 0x120000,false);
         return SQRLAXIResultFailed;
       }
     }
@@ -767,14 +767,14 @@ SQRLAXIResult SQRLAXICDMAReadBytes(SQRLAXIRef self, uint8_t *buffer, uint32_t le
   }
 
   // Soft reset core
-  SQRLAXIWrite(self, (1<<2), 0x120000, true);
+  SQRLAXIWrite(self, (1<<2), 0x120000, false);
 
   SQRLAXIResult res = SQRLAXIResultOK;
   // The CDMA dest reg is always the same - write it once
-  if ((res = SQRLAXIWrite(self, 0x00000000, 0x120020, true)) != 0) {
+  if ((res = SQRLAXIWrite(self, 0x00000000, 0x120020, false)) != 0) {
     return res;
   }
-  if ((res = SQRLAXIWrite(self, 0x00000002, 0x120024, true)) != 0) {
+  if ((res = SQRLAXIWrite(self, 0x00000002, 0x120024, false)) != 0) {
     return res;
   }
 
@@ -784,14 +784,14 @@ SQRLAXIResult SQRLAXICDMAReadBytes(SQRLAXIRef self, uint8_t *buffer, uint32_t le
     uint32_t bytesToRead = (len-pos)>65536?65536:(len-pos);
 
     // Run CDMA Command - Setup Addresses
-    if ((res = SQRLAXIWrite(self, (srcAddr+pos) & 0xFFFFFFFF, 0x120018, true)) != 0) {
+    if ((res = SQRLAXIWrite(self, (srcAddr+pos) & 0xFFFFFFFF, 0x120018, false)) != 0) {
         return res;
     }
-    if ((res = SQRLAXIWrite(self, ((srcAddr+pos) >> 32ULL) & 0xFFFFFFFF, 0x12001C, true)) != 0) {
+    if ((res = SQRLAXIWrite(self, ((srcAddr+pos) >> 32ULL) & 0xFFFFFFFF, 0x12001C, false)) != 0) {
         return res;
     }
     // Write BTT to run transaction
-    if ((res = SQRLAXIWrite(self, bytesToRead, 0x120028, true)) != 0) {
+    if ((res = SQRLAXIWrite(self, bytesToRead, 0x120028, false)) != 0) {
       return res;
     }
 
@@ -817,7 +817,7 @@ SQRLAXIResult SQRLAXICDMAReadBytes(SQRLAXIRef self, uint8_t *buffer, uint32_t le
       }
       if (err) {
         // Soft reset core and abort
-        SQRLAXIWrite(self, (1<<2), 0x120000, 0);
+        SQRLAXIWrite(self, (1<<2), 0x120000, false);
         return SQRLAXIResultFailed;
       }
       busy = (~(status >> 1) & 0x1);
@@ -852,37 +852,37 @@ SQRLAXIResult SQRLAXICDMACopyBytes(SQRLAXIRef self, uint64_t srcAddr, uint64_t d
   }
 
   // Soft reset core
-  SQRLAXIWrite(self, (1<<2), 0x120000, true);
+  SQRLAXIWrite(self, (1<<2), 0x120000, false);
 
   SQRLAXIResult res = SQRLAXIResultOK;
-  // Operate in up to 8MB chunks (CDMA Maximum transfer size)
+  // Operate in up to 64MB chunks (CDMA Maximum transfer size)
   uint64_t pos = 0;
   while (pos < len) {
-    uint32_t bytesToSend = (uint32_t)((len-pos)>(8*1024*1024)?(8*1024*1024):(len-pos));
+    uint32_t bytesToSend = (uint32_t)((len-pos)>(64*1024*1024)?(64*1024*1024):(len-pos));
 
     // Run CDMA Command - Setup Addresses
     //printf("Setting up write to %08x\n", (uint32_t)(destAddr+pos) & 0xFFFFFFFF);
     uint32_t low = (uint32_t)(destAddr+pos) & 0xFFFFFFFF;
     uint32_t high = (uint32_t)((destAddr+pos) >> 32ULL) & 0xFFFFFFFF;
     //printf("Copy to %08x %08x\n", high, low);
-    if ((res = SQRLAXIWrite(self, low, 0x120020,true)) != 0) {
+    if ((res = SQRLAXIWrite(self, low, 0x120020,false)) != 0) {
         return res;
     }
-    if ((res = SQRLAXIWrite(self, high, 0x120024,true)) != 0) {
+    if ((res = SQRLAXIWrite(self, high, 0x120024,false)) != 0) {
         return res;
     }
     low = (uint32_t)(srcAddr+pos) & 0xFFFFFFFF;
     high = (uint32_t)((srcAddr+pos) >> 32ULL) & 0xFFFFFFFF;
     //printf("Copy from %08x %08x\n", high, low);
-    if ((res = SQRLAXIWrite(self, low, 0x120018,true)) != 0) {
+    if ((res = SQRLAXIWrite(self, low, 0x120018,false)) != 0) {
         return res;
     }
-    if ((res = SQRLAXIWrite(self, high, 0x12001c,true)) != 0) {
+    if ((res = SQRLAXIWrite(self, high, 0x12001c,false)) != 0) {
         return res;
     }
     // This triggers the transfer
     //printf("BTT %08x\n", bytesToSend);
-    if ((res = SQRLAXIWrite(self, bytesToSend, 0x120028,true)) != 0) {
+    if ((res = SQRLAXIWrite(self, bytesToSend, 0x120028,false)) != 0) {
       return res;
     }
     // Wait for completion! (TODO - could double buffer 32KB packets...)
@@ -908,7 +908,7 @@ SQRLAXIResult SQRLAXICDMACopyBytes(SQRLAXIRef self, uint64_t srcAddr, uint64_t d
       busy = (~(status >> 1) & 0x1);
       if (err) {
         // Soft reset core and abort
-        SQRLAXIWrite(self, (1<<2), 0x120000,true);
+        SQRLAXIWrite(self, (1<<2), 0x120000,false);
         return SQRLAXIResultFailed;
       }
     }

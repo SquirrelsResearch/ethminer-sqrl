@@ -189,11 +189,11 @@ bool SQRLMiner::initDevice()
 	}
         sqrllog << "Instructing FK VRM, if present, to target " << m_settings.fkVCCINT << "mv";
         sqrllog << "Closest Viable Voltage " << tmv << "mv";
-        SQRLAXIWrite(m_axi, 0xA, 0x9040, true); 	
-        SQRLAXIWrite(m_axi, 0x158, 0x9108, true); 	
-        SQRLAXIWrite(m_axi, 0x00, 0x9108, true); 	
-        SQRLAXIWrite(m_axi, 0x200 | tWiper, 0x9108, true); 	
-        SQRLAXIWrite(m_axi, 0x1, 0x9100, true); 	
+        SQRLAXIWrite(m_axi, 0xA, 0x9040, false); 	
+        SQRLAXIWrite(m_axi, 0x158, 0x9108, false); 	
+        SQRLAXIWrite(m_axi, 0x00, 0x9108, false); 	
+        SQRLAXIWrite(m_axi, 0x200 | tWiper, 0x9108, false); 	
+        SQRLAXIWrite(m_axi, 0x1, 0x9100, false); 	
       }
 
       // Initialize clk
