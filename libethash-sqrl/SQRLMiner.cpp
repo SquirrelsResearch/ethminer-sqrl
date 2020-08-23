@@ -357,7 +357,7 @@ bool SQRLMiner::initEpoch_internal()
     }
     sqrllog << "Preparing new DAG Generator Parameters...";
     sqrllog << "NUM_PARENT_NODES = " << num_parent_nodes;
-    uint32_t num_mixers=16; // This is fixed at bitstream gen time
+    uint32_t num_mixers=m_settings.dagMixers; // This is fixed at bitstream gen time, added only for convience
     sqrllog << "NUM_MIXERS = "<< num_mixers;
     uint32_t mixer_size = m_epochContext.dagSize/64/num_mixers;
     uint32_t leftover = (m_epochContext.dagSize/64 - mixer_size*num_mixers);
@@ -796,6 +796,33 @@ void SQRLMiner::workLoop()
 void SQRLMiner::enumDevices(std::map<string, DeviceDescriptor>& _DevicesCollection, SQSettings _settings)
 {
     unsigned numDevices = getNumDevices(_settings);
+    if (numDevices == 1)  // 127.0.0.1:2000-20XX
+    {
+        string s = _settings.hosts[0];
+        if ((s.find("-") != std::string::npos) && (s.find(":") != std::string::npos) && (s.find(":") < s.find("-")))
+        {
+            vector<string> strs;
+            boost::split(strs, s, boost::is_any_of(":"));
+
+            string ip = strs[0];
+            string portRange = strs[1];
+
+            vector<string> ports;
+            boost::split(ports, portRange, boost::is_any_of("-"));
+
+            int startPort = std::stoi(ports[0]);
+            int endPort = std::stoi(ports[1]);
+            _settings.hosts.clear();
+
+            for (int i = startPort; i <= endPort; i++)
+            {
+                string newIpPort = ip + ":" + std::to_string(i);
+                _settings.hosts.push_back(newIpPort);
+            }
+
+            numDevices = getNumDevices(_settings);
+        }
+    }
 
     for (unsigned i = 0; i < numDevices; i++)
     {

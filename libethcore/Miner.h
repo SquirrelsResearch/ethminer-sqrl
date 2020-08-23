@@ -132,6 +132,7 @@ struct SQSettings : public MinerSettings
    unsigned workDelay = 50000;
    unsigned fkVCCINT = 0; // 0 == no action
    bool dieOnError = false;
+   unsigned dagMixers = 16;
 };
 
 struct SolutionAccountType
