@@ -797,6 +797,34 @@ void SQRLMiner::enumDevices(std::map<string, DeviceDescriptor>& _DevicesCollecti
 {
     unsigned numDevices = getNumDevices(_settings);
 
+    if (numDevices == 1)  // 127.0.0.1:2000-20XX
+    {
+        string s = _settings.hosts[0];
+        if (s.find("-") != std::string::npos)
+        {
+            vector<string> strs;
+            boost::split(strs, s, boost::is_any_of(":"));
+
+            string ip = strs[0];
+            string portRange = strs[1];
+
+            vector<string> ports;
+            boost::split(ports, portRange, boost::is_any_of("-"));
+
+            int startPort = std::stoi(ports[0]);
+            int endPort = std::stoi(ports[1]);
+            _settings.hosts.clear();
+
+            for (int i = startPort; i <= endPort; i++)
+            {
+                string newIpPort = ip + ":" + std::to_string(i);
+                _settings.hosts.push_back(newIpPort);
+            }
+
+            numDevices = getNumDevices(_settings);
+        }
+    }
+
     for (unsigned i = 0; i < numDevices; i++)
     {
         string uniqueId;
