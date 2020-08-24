@@ -472,7 +472,7 @@ void SQRLMiner::kick_miner()
 
 void SQRLMiner::search(const dev::eth::WorkPackage& w)
 {
-    const auto& context = ethash::get_global_epoch_context_full(w.epoch);
+    const auto& context = ethash::get_global_epoch_context(w.epoch);
     const auto header = ethash::hash256_from_bytes(w.header.data());
     const auto boundary = ethash::hash256_from_bytes(w.boundary.data());
     auto nonce = w.startNonce;
@@ -615,7 +615,7 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
 
 	for (int i=0; i < 4; i++) {
           if (nonceValid[i]) {
-	    auto r = ethash::search(context, header, boundary, nonce[i], 1);
+	    auto r = ethash::search_light(context, header, boundary, nonce[i], 1);
 	    if (r.solution_found) {
               h256 mix{reinterpret_cast<byte*>(r.mix_hash.bytes), h256::ConstructFromPointer};
               auto sol = Solution{r.nonce, mix, w, std::chrono::steady_clock::now(), m_index};
