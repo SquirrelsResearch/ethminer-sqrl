@@ -195,6 +195,17 @@ bool SQRLMiner::initDevice()
         SQRLAXIWrite(m_axi, 0x200 | tWiper, 0x9108, false); 	
         SQRLAXIWrite(m_axi, 0x1, 0x9100, false); 	
       }
+      if (m_settings.jcVCCINT > 500) {
+        sqrllog << "Asking JCM VRM, if present, to target " << m_settings.jcVCCINT << "mv";
+
+        uint16_t vEnc = (uint16_t)(((double)m_settings.jcVCCINT/1000.0) * 256.0);
+        SQRLAXIWrite(m_axi, 0xA, 0xA040, false); // Soft Reset IIC 	
+        SQRLAXIWrite(m_axi, 0x14d, 0xA108, false); // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia) 	
+        SQRLAXIWrite(m_axi, 0x21, 0xA108, false); // Transmit FIFO byte 2, VOUT CMD 
+        SQRLAXIWrite(m_axi, 0x200 | (vEnc & 0xFF), 0xA108, false); // Transmit FIFO byte 3 // vEnc[0]
+        SQRLAXIWrite(m_axi, 0x200 | ((vEnc >> 8) & 0xFF), 0xA108, false); // Transmit FIFO byte 4 // vEnc[1] (With Stop)
+        SQRLAXIWrite(m_axi, 0x1, 0xA100, false); // Send IIC transaction 	
+      }
 
       // Initialize clk
       sqrllog << "Stock Clock: " << setClock(-2);
