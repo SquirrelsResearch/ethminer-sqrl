@@ -75,3 +75,5 @@ node_modules/
 # vscode
 .vscode/
 /.vs
+/ethminer/.vs
+/ethminer
