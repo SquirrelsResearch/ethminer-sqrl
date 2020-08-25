@@ -195,6 +195,17 @@ bool SQRLMiner::initDevice()
         SQRLAXIWrite(m_axi, 0x200 | tWiper, 0x9108, false); 	
         SQRLAXIWrite(m_axi, 0x1, 0x9100, false); 	
       }
+      if (m_settings.jcVCCINT > 500) {
+        sqrllog << "Asking JCM VRM, if present, to target " << m_settings.jcVCCINT << "mv";
+
+        uint16_t vEnc = (uint16_t)(((double)m_settings.jcVCCINT/1000.0) * 256.0);
+        SQRLAXIWrite(m_axi, 0xA, 0xA040, false); // Soft Reset IIC 	
+        SQRLAXIWrite(m_axi, 0x14d, 0xA108, false); // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia) 	
+        SQRLAXIWrite(m_axi, 0x21, 0xA108, false); // Transmit FIFO byte 2, VOUT CMD 
+        SQRLAXIWrite(m_axi, 0x200 | (vEnc & 0xFF), 0xA108, false); // Transmit FIFO byte 3 // vEnc[0]
+        SQRLAXIWrite(m_axi, 0x200 | ((vEnc >> 8) & 0xFF), 0xA108, false); // Transmit FIFO byte 4 // vEnc[1] (With Stop)
+        SQRLAXIWrite(m_axi, 0x1, 0xA100, false); // Send IIC transaction 	
+      }
 
       // Initialize clk
       sqrllog << "Stock Clock: " << setClock(-2);
@@ -357,7 +368,7 @@ bool SQRLMiner::initEpoch_internal()
     }
     sqrllog << "Preparing new DAG Generator Parameters...";
     sqrllog << "NUM_PARENT_NODES = " << num_parent_nodes;
-    uint32_t num_mixers=16; // This is fixed at bitstream gen time
+    uint32_t num_mixers=m_settings.dagMixers; // This is fixed at bitstream gen time, added only for convience
     sqrllog << "NUM_MIXERS = "<< num_mixers;
     uint32_t mixer_size = m_epochContext.dagSize/64/num_mixers;
     uint32_t leftover = (m_epochContext.dagSize/64 - mixer_size*num_mixers);
@@ -472,7 +483,7 @@ void SQRLMiner::kick_miner()
 
 void SQRLMiner::search(const dev::eth::WorkPackage& w)
 {
-    const auto& context = ethash::get_global_epoch_context_full(w.epoch);
+    const auto& context = ethash::get_global_epoch_context(w.epoch);
     const auto header = ethash::hash256_from_bytes(w.header.data());
     const auto boundary = ethash::hash256_from_bytes(w.boundary.data());
     auto nonce = w.startNonce;
@@ -615,7 +626,7 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
 
 	for (int i=0; i < 4; i++) {
           if (nonceValid[i]) {
-	    auto r = ethash::search(context, header, boundary, nonce[i], 1);
+	    auto r = ethash::search_light(context, header, boundary, nonce[i], 1);
 	    if (r.solution_found) {
               h256 mix{reinterpret_cast<byte*>(r.mix_hash.bytes), h256::ConstructFromPointer};
               auto sol = Solution{r.nonce, mix, w, std::chrono::steady_clock::now(), m_index};
@@ -796,6 +807,33 @@ void SQRLMiner::workLoop()
 void SQRLMiner::enumDevices(std::map<string, DeviceDescriptor>& _DevicesCollection, SQSettings _settings)
 {
     unsigned numDevices = getNumDevices(_settings);
+    if (numDevices == 1)  // 127.0.0.1:2000-20XX
+    {
+        string s = _settings.hosts[0];
+        if ((s.find("-") != std::string::npos) && (s.find(":") != std::string::npos) && (s.find(":") < s.find("-")))
+        {
+            vector<string> strs;
+            boost::split(strs, s, boost::is_any_of(":"));
+
+            string ip = strs[0];
+            string portRange = strs[1];
+
+            vector<string> ports;
+            boost::split(ports, portRange, boost::is_any_of("-"));
+
+            int startPort = std::stoi(ports[0]);
+            int endPort = std::stoi(ports[1]);
+            _settings.hosts.clear();
+
+            for (int i = startPort; i <= endPort; i++)
+            {
+                string newIpPort = ip + ":" + std::to_string(i);
+                _settings.hosts.push_back(newIpPort);
+            }
+
+            numDevices = getNumDevices(_settings);
+        }
+    }
 
     if (numDevices == 1)  // 127.0.0.1:2000-20XX
     {

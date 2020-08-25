@@ -131,7 +131,9 @@ struct SQSettings : public MinerSettings
    bool skipStallDetection = 1;
    unsigned workDelay = 50000;
    unsigned fkVCCINT = 0; // 0 == no action
+   unsigned jcVCCINT = 0; // 0 == no action
    bool dieOnError = false;
+   unsigned dagMixers = 16;
 };
 
 struct SolutionAccountType

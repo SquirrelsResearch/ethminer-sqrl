@@ -14,13 +14,13 @@ cable_configure_toolchain(DEFAULT cxx11)
 set(HUNTER_CONFIGURATION_TYPES Release CACHE STRING "Build type of Hunter packages")
 set(HUNTER_JOBS_NUMBER 6 CACHE STRING "Number of parallel builds used by Hunter")
 HunterGate(
-    URL "https://github.com/ruslo/hunter/archive/v0.23.112.tar.gz"
-    SHA1 "4b894e1d5d203f0cc9a77431dbb1b486ab6f4430"
+    URL "https://github.com/cpp-pm/hunter/archive/v0.23.267.tar.gz"
+    SHA1 "9c5c7fa6e17c2ae15dd922184bc7c51235aaae70"
     LOCAL
 )
 
 project(ethminer)
-set(PROJECT_VERSION 0.19.0-sqrl-v1.3.4)
+set(PROJECT_VERSION 0.19.0-sqrl-v1.4.0)
 
 cable_set_build_type(DEFAULT Release CONFIGURATION_TYPES Release RelWithDebInfo)
 
@@ -30,7 +30,7 @@ option(ETHASHCPU "Build with CPU mining (only for development)" OFF)
 option(ETHASHSQRL "Build with SQRL FPGA mining)" ON)
 option(ETHDBUS "Build with D-Bus support" OFF)
 option(APICORE "Build with API Server support" ON)
-option(BINKERN "Install AMD binary kernels" ON)
+option(BINKERN "Install AMD binary kernels" OFF)
 option(DEVBUILD "Log developer metrics" OFF)
 
 # propagates CMake configuration options to the compiler
@@ -90,6 +90,11 @@ message("")
 include(EthCompilerSettings)
 if(UNIX AND NOT APPLE)
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libstdc++")
+endif()
+
+# ARM
+if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -latomic")
 endif()
 
 
