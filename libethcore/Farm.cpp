@@ -464,6 +464,14 @@ void Farm::accountSolution(unsigned _minerIdx, SolutionAccountingEnum _accountin
         m_telemetry.miners.at(_minerIdx).solutions.tstamp = std::chrono::steady_clock::now();
         return;
     }
+    if (_accounting == SolutionAccountingEnum::Low)
+    {
+        m_telemetry.farm.solutions.low++;
+        m_telemetry.farm.solutions.tstamp = std::chrono::steady_clock::now();
+        m_telemetry.miners.at(_minerIdx).solutions.low++;
+        m_telemetry.miners.at(_minerIdx).solutions.tstamp = std::chrono::steady_clock::now();
+        return;
+    }
 }
 
 /**
@@ -520,14 +528,24 @@ void Farm::submitProofAsync(Solution const& _s)
     if (!m_Settings.noEval)
     {
         Result r = EthashAux::eval(_s.work.epoch, _s.work.header, _s.nonce);
-        if (r.value > _s.work.boundary)
+	// SQRL fixed difficulty for health check
+	if ( (r.value > h256("0x000001ffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")) && (r.value > _s.work.boundary))
         {
             accountSolution(_s.midx, SolutionAccountingEnum::Failed);
-            cwarn << "GPU " << _s.midx
+            cwarn << "Miner " << _s.midx
                   << " gave incorrect result. Lower overclocking values if it happens frequently.";
             return;
         }
-        m_onSolutionFound(Solution{_s.nonce, r.mixHash, _s.work, _s.tstamp, _s.midx});
+        if (r.value <= _s.work.boundary)
+        {
+          m_onSolutionFound(Solution{_s.nonce, r.mixHash, _s.work, _s.tstamp, _s.midx});
+	}
+	else
+       	{
+          // SQRL Fixed fifficulty share
+	  accountSolution(_s.midx, SolutionAccountingEnum::Low);
+	}
+	  
     }
     else
         m_onSolutionFound(_s);

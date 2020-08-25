@@ -499,7 +499,9 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
     uint8_t err = 0;
     err = SQRLAXIWriteBulk(m_axi, (uint8_t *)w.header.data(), 32, 0x5000, 1); 
     if (err != 0) sqrllog << "Failed setting ethcore header";
-    err = SQRLAXIWriteBulk(m_axi, (uint8_t *)w.boundary.data(), 32, 0x5020, 1);
+    auto falseTarget = h256("0x0000001fffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+    if (w.boundary > falseTarget) falseTarget = w.boundary;
+    err = SQRLAXIWriteBulk(m_axi, (uint8_t*)falseTarget.data(), 32, 0x5020, 1);
     if (err != 0) sqrllog << "Failed setting ethcore target";
     uint32_t nonceStartHigh = nonce >> 32;
     uint32_t nonceStartLow = nonce & 0xFFFFFFFF;
@@ -629,17 +631,11 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
 
 	for (int i=0; i < 4; i++) {
           if (nonceValid[i]) {
-	    auto r = ethash::search_light(context, header, boundary, nonce[i], 1);
-	    if (r.solution_found) {
-              h256 mix{reinterpret_cast<byte*>(r.mix_hash.bytes), h256::ConstructFromPointer};
-              auto sol = Solution{r.nonce, mix, w, std::chrono::steady_clock::now(), m_index};
+            auto sol = Solution{nonce[i], h256(0), w, std::chrono::steady_clock::now(), m_index};
  
-              sqrllog << EthWhite << "Job: " << w.header.abridged()
-                   << " Sol: " << toHex(sol.nonce, HexPrefix::Add) << EthReset;
-              Farm::f().submitProof(sol);
-	    } else {
-	      sqrllog << EthRed << "Could not validate FPGA solution";
-	    }
+            sqrllog << EthWhite << "Job: " << w.header.abridged()
+                 << " Sol: " << toHex(sol.nonce, HexPrefix::Add) << EthReset;
+            Farm::f().submitProof(sol);
 	  }
 	}
 

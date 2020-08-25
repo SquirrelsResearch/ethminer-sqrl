@@ -88,7 +88,8 @@ enum class SolutionAccountingEnum
     Accepted,
     Rejected,
     Wasted,
-    Failed
+    Failed,
+    Low,
 };
 
 struct MinerSettings
@@ -142,6 +143,7 @@ struct SolutionAccountType
     unsigned rejected = 0;
     unsigned wasted = 0;
     unsigned failed = 0;
+    unsigned low = 0;
     std::chrono::steady_clock::time_point tstamp = std::chrono::steady_clock::now();
     string str()
     {
@@ -152,6 +154,8 @@ struct SolutionAccountType
             _ret.append(":R" + to_string(rejected));
         if (failed)
             _ret.append(":F" + to_string(failed));
+        if (low)
+            _ret.append(":L" + to_string(low));
         return _ret;
     };
 };
