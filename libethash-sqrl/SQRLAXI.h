@@ -13,6 +13,7 @@ typedef uint8_t bool;
 #endif
 
 #endif
+#pragma optimize("", off)
 
 typedef struct _SQRLAXI * SQRLAXIRef;
 

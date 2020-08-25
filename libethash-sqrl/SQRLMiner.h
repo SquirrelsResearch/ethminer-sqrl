@@ -24,6 +24,7 @@ along with ethminer.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <functional>
 
+
 namespace dev
 {
 namespace eth
@@ -55,7 +56,7 @@ private:
     double getClock();
     double setClock(double targetClk);
 
-    double m_lastClk = 0;
+    atomic<double> m_lastClk = {0};
     SQRLAXIRef m_axi = NULL;
     std::mutex axiMutex;
 

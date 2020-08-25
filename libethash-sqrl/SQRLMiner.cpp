@@ -666,6 +666,12 @@ void SQRLMiner::autoTune() {
         float mhs = hash / pow(10, 6);
 
         auto it = std::find(_freqSteps.begin(), _freqSteps.end(), m_lastClk);
+        if (it == _freqSteps.end())
+        {
+            sqrllog << EthRed << "Could not find starting index, stopping...";
+            return;
+        }
+
         auto currentStepIndex = std::distance(_freqSteps.begin(), it);
        
         if (mhs > 10)  // assume above 10 mhs -> stable, can try higher clock
@@ -757,7 +763,7 @@ double SQRLMiner::setClock(double targetClk) {
       SQRLAXIWrite(m_axi, 0x3, 0x825c, true);
       currentClk = vco/desiredDiv;
       sqrllog << "Setting CoreClk to " << (int)currentClk;
-      m_lastClk = currentClk;
+      m_lastClk = (int)currentClk;
     }
   } else if (targetClk < -1.0) {
     sqrllog << "Resetting CoreClk to Stock";
