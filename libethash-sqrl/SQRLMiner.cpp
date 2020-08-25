@@ -58,7 +58,7 @@ along with ethminer.  If not, see <http://www.gnu.org/licenses/>.
 #endif
 
 
-#include <SQRLAXI.h>
+#include "SQRLAXI.h"
 
 using namespace std;
 using namespace dev;
@@ -246,7 +246,7 @@ bool SQRLMiner::initEpoch_internal()
     // m_epochContext.lightSize
     // m_epochContext.dagSize
     // m_epochContext.lightCache
-    
+    _lastTuneTime = std::chrono::steady_clock::now();
     m_dagging = true;   
     axiMutex.lock();
     sqrllog << "Changing to Epoch " << m_epochContext.epochNumber; 
@@ -488,6 +488,7 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
     const auto boundary = ethash::hash256_from_bytes(w.boundary.data());
     auto nonce = w.startNonce;
 
+    
 
     m_new_work.store(false, std::memory_order_relaxed);
 
@@ -642,11 +643,69 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
 
         // Update the hash rate
         updateHashRate(newTChks, 1);
+
+        if (m_settings.autoTune)
+            autoTune();
+
 	if (shouldReset) break; // Let core reset
     }
     // Ensure core is in reset
     SQRLAXIWrite(m_axi, 0x0, 0x506c, false);
     axiMutex.unlock();
+
+}
+// Check current hashrate and if it's stable for given time (60sec), try higher clock. If not, lower the clock.
+void SQRLMiner::autoTune() {
+
+    auto elapsedSeconds = std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::steady_clock::now() - (timePoint)_lastTuneTime)
+                              .count();
+    if (elapsedSeconds > 60)
+    {
+        float hash = RetrieveHashRate();
+        float mhs = hash / pow(10, 6);
+
+        auto it = std::find(_freqSteps.begin(), _freqSteps.end(), m_lastClk);
+        auto currentStepIndex = std::distance(_freqSteps.begin(), it);
+       
+        if (mhs > 10)  // assume above 10 mhs -> stable, can try higher clock
+        {
+            if (!_maxFreqReached)
+            {
+                if (currentStepIndex != _freqSteps.size() - 1) //not getting out of bounds
+                {
+                    int nextClock = _freqSteps[currentStepIndex + 1]+1;//+1 for precision issues
+                    sqrllog << "Stable at " << m_lastClk << "MHz, trying " << nextClock-1 << "...";
+                    setClock(nextClock);
+                    m_lastClk = nextClock - 1;
+                }
+                else
+                {
+                    sqrllog << "Clocking out of bounds, max frequency reached!";
+                    _maxFreqReached = true;
+                }
+            }
+        }
+        else // Unstable, downclock...
+        {
+            _maxFreqReached = true;
+            if (currentStepIndex > 0)
+            {
+                int nextClock = _freqSteps[currentStepIndex - 1]+1; //+1 for precision issues
+                sqrllog << "Unstable at " << m_lastClk << "MHz, downclocking to " << nextClock-1<< "...";
+                setClock(nextClock);
+                m_lastClk = nextClock - 1;
+            }
+            else
+                sqrllog << "Clocking out of bounds, min frequency reached!";
+     
+        }
+
+       // sqrllog << isStable << " elapsed hash="<<mhs;
+        _lastTuneTime = std::chrono::steady_clock::now();
+    }
+
+    
 }
 
 double SQRLMiner::getClock() {
@@ -811,34 +870,6 @@ void SQRLMiner::enumDevices(std::map<string, DeviceDescriptor>& _DevicesCollecti
     {
         string s = _settings.hosts[0];
         if ((s.find("-") != std::string::npos) && (s.find(":") != std::string::npos) && (s.find(":") < s.find("-")))
-        {
-            vector<string> strs;
-            boost::split(strs, s, boost::is_any_of(":"));
-
-            string ip = strs[0];
-            string portRange = strs[1];
-
-            vector<string> ports;
-            boost::split(ports, portRange, boost::is_any_of("-"));
-
-            int startPort = std::stoi(ports[0]);
-            int endPort = std::stoi(ports[1]);
-            _settings.hosts.clear();
-
-            for (int i = startPort; i <= endPort; i++)
-            {
-                string newIpPort = ip + ":" + std::to_string(i);
-                _settings.hosts.push_back(newIpPort);
-            }
-
-            numDevices = getNumDevices(_settings);
-        }
-    }
-
-    if (numDevices == 1)  // 127.0.0.1:2000-20XX
-    {
-        string s = _settings.hosts[0];
-        if (s.find("-") != std::string::npos)
         {
             vector<string> strs;
             boost::split(strs, s, boost::is_any_of(":"));

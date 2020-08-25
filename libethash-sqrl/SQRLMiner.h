@@ -35,10 +35,11 @@ public:
     ~SQRLMiner() override;
 
     static unsigned getNumDevices(SQSettings _settings);
-    static void enumDevices(std::map<string, DeviceDescriptor>& _DevicesCollection, SQSettings _settings);
+    static void enumDevices(
+        std::map<string, DeviceDescriptor>& _DevicesCollection, SQSettings _settings);
 
     void search(const dev::eth::WorkPackage& w);
-    void getTelemetry(unsigned int *tempC, unsigned int *fanprct, unsigned int *powerW) override;
+    void getTelemetry(unsigned int* tempC, unsigned int* fanprct, unsigned int* powerW) override;
 
 protected:
     bool initDevice() override;
@@ -53,9 +54,17 @@ private:
 
     double getClock();
     double setClock(double targetClk);
+
     double m_lastClk = 0;
     SQRLAXIRef m_axi = NULL;
     std::mutex axiMutex;
+
+    // auto tune
+    typedef std::chrono::steady_clock::time_point timePoint;
+    void autoTune();
+    atomic<timePoint> _lastTuneTime;
+    atomic<bool> _maxFreqReached = {false};
+    std::vector<int> _freqSteps = {300, 309, 320, 331, 342, 355, 369, 384, 400, 417, 436, 457, 480};
 };
 
 

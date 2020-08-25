@@ -362,6 +362,7 @@ public:
 
         app.add_option("--sqrl-hosts,--sq-hosts", m_SQSettings.hosts, "");
 	app.add_option("--sqrl-core-clk,--cclk", m_SQSettings.targetClk, "")->check(CLI::Range(50,600));
+    app.add_flag("--auto-tune", m_SQSettings.autoTune, "Auto tuning for best hashrate for each FPGA");
 	app.add_option("--sqrl-intensity-n,--sqin", m_SQSettings.intensityN,"Numerator of SQRL Intensity (0-255) - 0 disables rate control(Not Recommended)", true)->check(CLI::Range(0,255));
 	app.add_option("--sqrl-intensity-d,--sqid", m_SQSettings.intensityD,"Denominator of SQRL Intensity (1-32)", true)->check(CLI::Range(1,32));
 	app.add_option("--sqrl-patience,--sqp", m_SQSettings.patience, "Cycles to wait for on-chip network congestion to resolve itself before intervention - 0 disables(Not Recommended)", true)->check(CLI::Range(0,255));

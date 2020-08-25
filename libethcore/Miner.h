@@ -134,6 +134,7 @@ struct SQSettings : public MinerSettings
    unsigned jcVCCINT = 0; // 0 == no action
    bool dieOnError = false;
    unsigned dagMixers = 16;
+   bool autoTune;
 };
 
 struct SolutionAccountType
