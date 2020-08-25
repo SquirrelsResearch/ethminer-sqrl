@@ -200,9 +200,12 @@ bool SQRLMiner::initDevice()
 
         uint16_t vEnc = (uint16_t)(((double)m_settings.jcVCCINT/1000.0) * 256.0);
         SQRLAXIWrite(m_axi, 0xA, 0xA040, false); // Soft Reset IIC 	
-        SQRLAXIWrite(m_axi, 0x14d, 0xA108, false); // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia) 	
-        SQRLAXIWrite(m_axi, 0x21, 0xA108, false); // Transmit FIFO byte 2, VOUT CMD 
-        SQRLAXIWrite(m_axi, 0x200 | (vEnc & 0xFF), 0xA108, false); // Transmit FIFO byte 3 // vEnc[0]
+        SQRLAXIWrite(m_axi, 0x100|(0x4d<<1), 0xA108, false); // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia) 	
+        SQRLAXIWrite(m_axi, 0xD0, 0xA108, false); // Transmit FIFO byte 2 (SingleShotPage+Cmd)
+        SQRLAXIWrite(m_axi, 0x04, 0xA108, false); // Transmit FIFO byte 3 (Write)
+        SQRLAXIWrite(m_axi, (0x21 << 1), 0xA108, false); // Transmit FIFO byte 4 (AddrLo (CMD)	
+        SQRLAXIWrite(m_axi, 0x06, 0xA108, false); // Transmit FIFO byte 2, VOUT CMD 
+        SQRLAXIWrite(m_axi, 0x0 | (vEnc & 0xFF), 0xA108, false); // Transmit FIFO byte 3 // vEnc[0]
         SQRLAXIWrite(m_axi, 0x200 | ((vEnc >> 8) & 0xFF), 0xA108, false); // Transmit FIFO byte 4 // vEnc[1] (With Stop)
         SQRLAXIWrite(m_axi, 0x1, 0xA100, false); // Send IIC transaction 	
       }
