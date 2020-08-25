@@ -757,6 +757,7 @@ double SQRLMiner::setClock(double targetClk) {
       SQRLAXIWrite(m_axi, 0x3, 0x825c, true);
       currentClk = vco/desiredDiv;
       sqrllog << "Setting CoreClk to " << (int)currentClk;
+      m_lastClk = currentClk;
     }
   } else if (targetClk < -1.0) {
     sqrllog << "Resetting CoreClk to Stock";
