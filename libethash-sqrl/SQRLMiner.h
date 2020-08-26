@@ -29,8 +29,26 @@ namespace dev
 {
 namespace eth
 {
+struct IntensitySettings
+{
+    unsigned int patience;
+    unsigned int intensityN;
+    unsigned int intensityD;
+
+    IntensitySettings()
+    {
+        patience = 0;
+        intensityN = 0;
+        intensityD = 0;
+    }
+    string to_string()
+    {
+        return "P=" + std::to_string(patience) + " N=" + std::to_string(intensityN) + " D=" + std::to_string(intensityD);
+    }
+};
 class SQRLMiner : public Miner
 {
+
 public:
     SQRLMiner(unsigned _index, SQSettings _settings, DeviceDescriptor& _device, TelemetryType* telemetry);
     ~SQRLMiner() override;
@@ -42,10 +60,14 @@ public:
     void search(const dev::eth::WorkPackage& w);
     void getTelemetry(unsigned int* tempC, unsigned int* fanprct, unsigned int* powerW) override;
 
+   
+
 protected:
     bool initDevice() override;
     bool initEpoch_internal() override;
     void kick_miner() override;
+
+   
 
 private:
     atomic<bool> m_new_work = {false};
@@ -65,6 +87,9 @@ private:
     typedef std::chrono::steady_clock::time_point timePoint;
     void autoTune();
     void clearSolutionStats();
+    int findBestIntensitySoFar();
+    float getHardwareErrorRate();
+
     SolutionAccountType getSolutions();
     atomic<timePoint> m_lastTuneTime = {std::chrono::steady_clock::now()};
     atomic<bool> m_maxFreqReached = {false};
@@ -72,8 +97,18 @@ private:
     std::vector<int> _freqSteps = {300, 309, 320, 331, 342, 355, 369, 384, 400, 417, 436, 457, 480, 505, 533, 564, 600};
 
     TelemetryType* _telemetry;
-
-
+    IntensitySettings m_intensitySettings;
+    atomic<bool> m_intensityTuning = {false};
+    vector<pair<IntensitySettings, double>> m_shareTimes; // how many target checks in set time
+    std::vector<float> _throughputTargets = {0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.92};
+    uint8_t m_firstPassIndex = 0;
+    uint8_t m_secondPassLowerN = 0;
+    uint8_t m_secondPassUpperN = 0;
+    double m_hashCounter = {0};
+    uint8_t m_secondPassStepSizeN = 0;
+    pair<IntensitySettings, double> m_bestSettingsSoFar;
+    bool m_bestIntensityRangeFound = false;
+    bool m_intensityTuneFinished = false;
 };
 
 

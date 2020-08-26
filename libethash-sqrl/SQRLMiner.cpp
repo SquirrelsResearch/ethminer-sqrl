@@ -285,6 +285,12 @@ bool SQRLMiner::initEpoch_internal()
 	m_dagging = false;
 	axiMutex.unlock();
 	setClock(m_lastClk);
+
+    m_intensitySettings.patience = m_settings.patience;
+    m_intensitySettings.intensityD = m_settings.intensityD;
+    m_intensitySettings.intensityN = m_settings.intensityN;
+    m_lastTuneTime = std::chrono::steady_clock::now();
+
 	return true;
       }
     }
@@ -462,8 +468,10 @@ bool SQRLMiner::initEpoch_internal()
 
     axiMutex.unlock();
 
-
-     m_lastTuneTime = std::chrono::steady_clock::now();
+    m_intensitySettings.patience = m_settings.patience;
+    m_intensitySettings.intensityD = m_settings.intensityD;
+    m_intensitySettings.intensityN = m_settings.intensityN;
+    m_lastTuneTime = std::chrono::steady_clock::now();
 
     return true;
 }
@@ -516,12 +524,14 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
     if (err != 0) sqrllog << "Failed setting ethcore nonceStartLow";
 
     uint32_t flags = 0;
-    if (m_settings.patience != 0) {
-      flags |= (1 << 6) | ((m_settings.patience & 0xff) << 8); 
+    if (m_intensitySettings.patience != 0)
+    {
+        flags |= (1 << 6) | ((m_intensitySettings.patience & 0xff) << 8); 
     }
-    if (m_settings.intensityN != 0) {
-      flags |= (1 << 0) | ((m_settings.intensityN & 0xFF) << 24);
-      flags |= (((m_settings.intensityD & 0x3F)*8 -1) << 16);
+    if (m_intensitySettings.intensityN != 0)
+    {
+        flags |= (1 << 0) | ((m_intensitySettings.intensityN & 0xFF) << 24);
+        flags |= (((m_intensitySettings.intensityD & 0x3F) * 8 - 1) << 16);
     }
     err = SQRLAXIWrite(m_axi, flags, 0x5080, false);
     if (err != 0) {
@@ -632,7 +642,7 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
           // Reset the core, re-init nonceStart 
 	  shouldReset = 1;
 	}
-	lastSCnt = sCnt;
+
 
 	for (int i=0; i < 4; i++) {
           if (nonceValid[i]) {
@@ -643,12 +653,15 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
             Farm::f().submitProof(sol);
 	  }
 	}
-
+   
         // Update the hash rate
         updateHashRate(newTChks, 1);
 
         if (m_settings.autoTune > 0)
+        {
             autoTune();
+            m_hashCounter += tChkLo;
+        }
 
 	if (shouldReset) break; // Let core reset
     }
@@ -665,27 +678,36 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
 */
 void SQRLMiner::autoTune()
 {
-    auto elapsedSeconds = std::chrono::duration_cast<std::chrono::seconds>(
-        std::chrono::steady_clock::now() - (timePoint)m_lastTuneTime)
-                              .count();
-
-    float stabilityThreshold = 10;    // mhs
+    //Stage 1:
+    int stage1_averageSeconds = 60;
+    float stabilityThreshold = 10;  // mhs
+    
+    //Stage 2:
     float errorRateThreshold = 0.03;  // 3%
-    int tuningShareCount = 100;   // how many low shares to check to derive average from
+    int tuningShareCount = 100;      // how many low shares to check to derive average from
+
+    //Stage 3:
+    float upperThroughputThreshold = 0.92;
+    int stage3_averageSeconds = 60;
+    
+    
 
     float hash = RetrieveHashRate();
     float mhs = hash / pow(10, 6);
     auto it = std::find(_freqSteps.begin(), _freqSteps.end(), m_lastClk);
     auto currentStepIndex = std::distance(_freqSteps.begin(), it);
 
-    // Stage 1: Do a quick tune to get max frequency
-    if (m_settings.autoTune >= 1)
+    auto elapsedSeconds = std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::steady_clock::now() - (timePoint)m_lastTuneTime).count();
+
+   
+    if (m_settings.autoTune >= 1 && !m_stableFreqFound)  // Stage 1: Do a quick tune to get max frequency
     {
-        if (elapsedSeconds > 60)
+        if (elapsedSeconds > stage1_averageSeconds)
         {
             if (it == _freqSteps.end())
             {
-                sqrllog << EthRed << "S1: Could not find starting index, stopping...";
+                sqrllog << EthOrange << "S1: Could not find starting index, stopping...";
                 return;
             }
 
@@ -698,14 +720,13 @@ void SQRLMiner::autoTune()
                     {
                         int nextClock =
                             _freqSteps[currentStepIndex + 1] + 1;  //+1 for precision issues
-                        sqrllog << "S1: Stable at " << m_lastClk << "MHz, trying " << nextClock - 1
-                                << "...";
+                        sqrllog << EthOrange<< "S1: Stable at " << m_lastClk << "MHz, trying " << nextClock - 1 << "...";
                         setClock(nextClock);
                         m_lastClk = nextClock - 1;
                     }
                     else
                     {
-                        sqrllog << "Clocking out of bounds, max frequency reached!";
+                        sqrllog << EthOrange<< "Clocking out of bounds, max frequency reached!";
                         m_maxFreqReached = true;
                     }
                 }
@@ -716,7 +737,7 @@ void SQRLMiner::autoTune()
                 if (currentStepIndex > 0)
                 {
                     int nextClock = _freqSteps[currentStepIndex - 1] + 1;  //+1 for precision issues
-                    sqrllog << "S1: Unstable at " << m_lastClk << "MHz, downclocking to "
+                    sqrllog << EthOrange <<"S1: Unstable at " << m_lastClk << "MHz, downclocking to "
                             << nextClock - 1 << "...";
                     setClock(nextClock);
                     m_lastClk = nextClock - 1;
@@ -724,29 +745,28 @@ void SQRLMiner::autoTune()
                     clearSolutionStats();
                 }
                 else
-                    sqrllog << "S1: Clocking out of bounds, min frequency reached!";
+                    sqrllog << EthOrange<< "S1: Clocking out of bounds, min frequency reached!";
             }
 
 
             m_lastTuneTime = std::chrono::steady_clock::now();
         }
     }
-    if (m_settings.autoTune >= 2)
+    if (m_settings.autoTune >= 2)// Stage 2: Check for long term stability and error rate (removes marginally stable)
     {
-        // Stage 2: Check for long term stability and error rate (removes marginally stable)
+        
         if (m_maxFreqReached && !m_stableFreqFound)
         {
             // calculate error rate
             SolutionAccountType solutions = getSolutions();
 
-            if (solutions.low > 0 && solutions.low % tuningShareCount == 0)
+            if (solutions.low > 0 && (solutions.low+solutions.failed) % tuningShareCount == 0)
             {
                 float errorRate = (float)solutions.failed / (solutions.low + solutions.failed);
 
                 if (errorRate > errorRateThreshold)
                 {
-                    sqrllog << "S2: Error rate of " << errorRate * 100 << "% above threshold ("
-                            << errorRateThreshold * 100 << "%), downclocking...";
+                    sqrllog << EthOrange<< "S2: Error rate of " << errorRate * 100 << "% above threshold (" << errorRateThreshold * 100 << "%), downclocking...";
                     int nextClock = _freqSteps[currentStepIndex - 1] + 1;  //+1 for precision issues
                     setClock(nextClock);
                     m_lastClk = nextClock - 1;
@@ -755,30 +775,228 @@ void SQRLMiner::autoTune()
                 }
                 else
                 {
-                    sqrllog << "S2: Stable long term frequency found at " << m_lastClk << "MHz";
+                    sqrllog << EthOrange<< "S2: Stable long term frequency found at " << m_lastClk << "MHz";
                     m_stableFreqFound = true;
                 }
             }
         }
     }
-    if (m_settings.autoTune >= 3)
-    {
-        // Stage 3: Tune intensity
-        if (m_stableFreqFound)
-        {
 
-        }
+    if (m_settings.autoTune >= 3 && !m_intensityTuneFinished)   
+    {       
+            if (m_stableFreqFound)
+            {
+                if (!m_intensityTuning)  // init
+                {
+                    float targetThroughput = _throughputTargets[m_firstPassIndex];
+                    m_intensitySettings.patience = 1;
+                    m_intensitySettings.intensityD = 8;
+                    m_intensitySettings.intensityN =
+                        (int)((m_intensitySettings.intensityD * targetThroughput) /
+                              (-targetThroughput + 1));  // derive inital N from 60% throughput.
+
+                    clearSolutionStats();
+                    m_intensityTuning = true;
+                    sqrllog << EthOrange << "S3: Intensity tuning started... init settings ->"
+                            << m_intensitySettings.to_string();
+
+                    m_lastTuneTime = std::chrono::steady_clock::now();
+                }
+                else
+                {
+                    if (elapsedSeconds > stage3_averageSeconds)
+                    {
+                        float errorRate = getHardwareErrorRate();
+
+                        float throughput =
+                            (float)m_intensitySettings.intensityN /
+                            (m_intensitySettings.intensityN + m_intensitySettings.intensityD);
+
+                        pair<IntensitySettings, double> p;
+
+                        double adjustedHash = m_hashCounter * (1 - errorRate);
+                        p = std::make_pair(m_intensitySettings, adjustedHash);  // penalize for
+                                                                                // producing errors
+
+                        if (m_bestSettingsSoFar.second < adjustedHash)
+                            m_bestSettingsSoFar = p;
+
+                        m_shareTimes.push_back(p);
+                        sqrllog << EthOrange << "S3: [" << m_intensitySettings.to_string()
+                                << "] errorRate=" << errorRate
+                                << " Hashrate=" << m_hashCounter / stage3_averageSeconds
+                                << " throughput=" << throughput * 100 << "%";
+
+
+                       
+
+                          if (!m_bestIntensityRangeFound)  // Stage 3.1: Tune intensity, find best range
+                            {
+                              if (m_secondPassLowerN == 0 &&
+                                  m_secondPassUpperN == 0)  // still first coarse pass
+                              {
+                                  m_firstPassIndex++;
+
+                                  float targetThroughput = _throughputTargets[m_firstPassIndex];
+                                  m_intensitySettings.intensityN =
+                                      (int)((m_intensitySettings.intensityD * targetThroughput) /
+                                            (-targetThroughput + 1));
+
+                                  if (m_firstPassIndex == _throughputTargets.size() - 1)
+                                  {
+                                      int bestIndex = findBestIntensitySoFar();
+                                      sqrllog
+                                          << EthOrange
+                                          << "S3.0: First tuning pass complete, best ->"
+                                          << m_shareTimes[bestIndex].first.to_string() << " with "
+                                          << m_shareTimes[bestIndex].second / stage3_averageSeconds
+                                          << "hs";
+
+                                      vector<double> averages(m_shareTimes.size() - 1);
+                                      for (int i = 0; i < m_shareTimes.size() - 1; i++)
+                                      {
+                                          averages[i] = (m_shareTimes[i].second +
+                                                            m_shareTimes[i + 1].second) /
+                                                        2;
+                                      }
+                                      for (int i = 0; i < m_shareTimes.size(); i++)
+                                      {
+                                          sqrllog << EthOrange << i << ","
+                                                  << m_shareTimes[i].second;
+                                      }
+                                      // find best average to obtain the more fine tuning range
+                                      int bestAvgIndex = 0;
+                                      double bestAvg = averages[bestAvgIndex];
+                                      for (int i = 1; i < averages.size(); i++)
+                                      {
+                                          if (averages[i] > averages[bestAvgIndex])
+                                          {
+                                              bestAvgIndex = i;
+                                              bestAvg = averages[i];
+                                          }
+                                          sqrllog << EthOrange << "[" << i << "]avg=>"
+                                                  << averages[i];
+                                      }
+                                      m_secondPassLowerN =
+                                          m_shareTimes[bestAvgIndex].first.intensityN;
+                                      m_secondPassUpperN =
+                                          m_shareTimes[bestAvgIndex + 1].first.intensityN;
+
+                                      uint8_t diff = m_secondPassUpperN - m_secondPassLowerN;
+                                      int stepSize = diff / 5;
+                                      if (stepSize < 0)
+                                          stepSize = 1;
+                                      m_secondPassStepSizeN = stepSize;
+
+                                      sqrllog << EthOrange
+                                              << "S3.1: Starting fine tuning (second pass) of N, "
+                                                 "within the "
+                                                 "range ["
+                                              << (int)m_secondPassLowerN << "-"
+                                              << (int)m_secondPassUpperN << "]";
+
+                                      m_shareTimes.clear();  // clear for the second pass
+                                      m_intensitySettings.intensityN = m_secondPassLowerN;
+                                  }
+                              }
+                            else  // second - fine pass of N
+                            {
+                                if (m_intensitySettings.intensityN <= m_secondPassUpperN)
+                                {
+                                    m_intensitySettings.intensityN += m_secondPassStepSizeN;
+                                }
+                                else
+                                {
+                                    sqrllog << EthOrange << "S3.1: Best setting so far ->"
+                                            << m_bestSettingsSoFar.first.to_string()
+                                            << " with hashrate="
+                                            << m_bestSettingsSoFar.second / stage3_averageSeconds;
+                                    m_bestIntensityRangeFound = true;
+                                    m_shareTimes.clear();
+                                    m_intensitySettings.patience++;
+                                    m_intensitySettings.intensityN = m_secondPassLowerN;
+                                }
+                            }
+                        }
+                        else  // Stage 3.2 -> increase patience, retest
+                        {
+                            if (m_intensitySettings.intensityN <= m_secondPassUpperN)
+                            {
+                                m_intensitySettings.intensityN += m_secondPassStepSizeN;
+                            }
+                            else
+                            {
+                                if (m_bestSettingsSoFar.first.patience ==
+                                    m_intensitySettings.patience)
+                                {  // we got new best with increased patience, keep increasing...
+                                    m_intensitySettings.patience++;
+                                    sqrllog << EthOrange << "S3.2: Best setting so far ->"
+                                            << m_bestSettingsSoFar.first.to_string()
+                                            << " with hashrate="
+                                            << m_bestSettingsSoFar.second / stage3_averageSeconds;
+                                }
+                                else
+                                {
+                                    sqrllog << EthOrange
+                                            << "Intensitivity tuning finished! Best settings="
+                                            << m_bestSettingsSoFar.first.to_string()
+                                            << " with hashrate="
+                                            << m_bestSettingsSoFar.second / stage3_averageSeconds;
+
+                                    m_intensitySettings = m_bestSettingsSoFar.first;
+                                    m_intensityTuneFinished = true;
+                                }
+                            }
+                        }
+                        sqrllog << EthBlueBold << "Average hashrate during tuning period="
+                                << (m_hashCounter / stage3_averageSeconds) / pow(10, 7) << "MHs";
+                        m_lastTuneTime = std::chrono::steady_clock::now();
+                        clearSolutionStats();
+                    }
+                }
+            }
+        
+       
     }
     
 }
-void SQRLMiner::clearSolutionStats() {
+int SQRLMiner::findBestIntensitySoFar()
+{
+    int bestIndex = 0;
+    double bestTime = m_shareTimes[0].second;
+    for (int i = 1; i < m_shareTimes.size(); i++)
+    {
+        double t = m_shareTimes[i].second;
+        if (t > bestTime)
+        {
+            bestIndex = i;
+            bestTime = t;
+          
+        }
+    }
+    return bestIndex;
+}
+
+void SQRLMiner::clearSolutionStats()
+{
     _telemetry->miners.at(m_index).solutions.accepted = 0;
     _telemetry->miners.at(m_index).solutions.failed = 0;
     _telemetry->miners.at(m_index).solutions.low = 0;
     _telemetry->miners.at(m_index).solutions.rejected = 0;
     _telemetry->miners.at(m_index).solutions.wasted = 0;
-}
 
+    m_hashCounter = 0;
+}
+float SQRLMiner::getHardwareErrorRate()
+{
+    auto sol = getSolutions();
+    int allSolutions = sol.accepted + sol.failed + sol.low;
+    int failedSolutions = sol.failed;
+    if (allSolutions == 0)
+        return 0;
+
+    return failedSolutions / (float)allSolutions;
+}
 SolutionAccountType SQRLMiner::getSolutions()
 {
     return _telemetry->miners.at(m_index).solutions;
