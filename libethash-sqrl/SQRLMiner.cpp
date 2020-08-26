@@ -200,9 +200,12 @@ bool SQRLMiner::initDevice()
 
         uint16_t vEnc = (uint16_t)(((double)m_settings.jcVCCINT/1000.0) * 256.0);
         SQRLAXIWrite(m_axi, 0xA, 0xA040, false); // Soft Reset IIC 	
-        SQRLAXIWrite(m_axi, 0x14d, 0xA108, false); // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia) 	
-        SQRLAXIWrite(m_axi, 0x21, 0xA108, false); // Transmit FIFO byte 2, VOUT CMD 
-        SQRLAXIWrite(m_axi, 0x200 | (vEnc & 0xFF), 0xA108, false); // Transmit FIFO byte 3 // vEnc[0]
+        SQRLAXIWrite(m_axi, 0x100|(0x4d<<1), 0xA108, false); // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia) 	
+        SQRLAXIWrite(m_axi, 0xD0, 0xA108, false); // Transmit FIFO byte 2 (SingleShotPage+Cmd)
+        SQRLAXIWrite(m_axi, 0x04, 0xA108, false); // Transmit FIFO byte 3 (Write)
+        SQRLAXIWrite(m_axi, (0x21 << 1), 0xA108, false); // Transmit FIFO byte 4 (AddrLo (CMD)	
+        SQRLAXIWrite(m_axi, 0x06, 0xA108, false); // Transmit FIFO byte 2, VOUT CMD 
+        SQRLAXIWrite(m_axi, 0x0 | (vEnc & 0xFF), 0xA108, false); // Transmit FIFO byte 3 // vEnc[0]
         SQRLAXIWrite(m_axi, 0x200 | ((vEnc >> 8) & 0xFF), 0xA108, false); // Transmit FIFO byte 4 // vEnc[1] (With Stop)
         SQRLAXIWrite(m_axi, 0x1, 0xA100, false); // Send IIC transaction 	
       }
@@ -497,7 +500,9 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
     uint8_t err = 0;
     err = SQRLAXIWriteBulk(m_axi, (uint8_t *)w.header.data(), 32, 0x5000, 1); 
     if (err != 0) sqrllog << "Failed setting ethcore header";
-    err = SQRLAXIWriteBulk(m_axi, (uint8_t *)w.boundary.data(), 32, 0x5020, 1);
+    auto falseTarget = h256("0x0000001fffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+    if (w.boundary > falseTarget) falseTarget = w.boundary;
+    err = SQRLAXIWriteBulk(m_axi, (uint8_t*)falseTarget.data(), 32, 0x5020, 1);
     if (err != 0) sqrllog << "Failed setting ethcore target";
     uint32_t nonceStartHigh = nonce >> 32;
     uint32_t nonceStartLow = nonce & 0xFFFFFFFF;
@@ -627,17 +632,11 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
 
 	for (int i=0; i < 4; i++) {
           if (nonceValid[i]) {
-	    auto r = ethash::search_light(context, header, boundary, nonce[i], 1);
-	    if (r.solution_found) {
-              h256 mix{reinterpret_cast<byte*>(r.mix_hash.bytes), h256::ConstructFromPointer};
-              auto sol = Solution{r.nonce, mix, w, std::chrono::steady_clock::now(), m_index};
+            auto sol = Solution{nonce[i], h256(0), w, std::chrono::steady_clock::now(), m_index};
  
-              sqrllog << EthWhite << "Job: " << w.header.abridged()
-                   << " Sol: " << toHex(sol.nonce, HexPrefix::Add) << EthReset;
-              Farm::f().submitProof(sol);
-	    } else {
-	      sqrllog << EthRed << "Could not validate FPGA solution";
-	    }
+            sqrllog << EthWhite << "Job: " << w.header.abridged()
+                 << " Sol: " << toHex(sol.nonce, HexPrefix::Add) << EthReset;
+            Farm::f().submitProof(sol);
 	  }
 	}
 
