@@ -622,9 +622,17 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
 	SQRLAXIRead(m_axi, &tChkLo, 0x5048);
 	SQRLAXIRead(m_axi, &tChkHi, 0x5044);
 	uint64_t tChks = ((uint64_t)tChkHi << 32) + tChkLo;
-	if (tChks < lastTChecks) tChkHi++; // Cheap rollover detection
-	uint64_t newTChks = tChks - lastTChecks;
+
+	uint64_t newTChks = 0;
+	if (!((tChkLo == 0) && (tChkHi == 0))) {
+	  if (tChks < lastTChecks) {
+            tChkHi++; // Cheap rollover detection
+	    tChks = ((uint64_t)tChkHi << 32) + tChkLo;
+	  }
+	  newTChks = tChks - lastTChecks;
+	}
 	lastTChecks = tChks; 
+
 	uint8_t shouldReset = 0;
 	if (!m_settings.skipStallDetection && (sCnt == lastSCnt)) {
           // Reset the core, re-init nonceStart 

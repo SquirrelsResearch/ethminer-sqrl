@@ -189,7 +189,6 @@ void Miner::updateHashRate(uint32_t _groupSize, uint32_t _increment) noexcept
     auto t = steady_clock::now();
     auto us = duration_cast<microseconds>(t - m_hashTime).count();
     m_hashTime = t;
-
     m_hashRate.store(
         us ? (float(m_groupCount * _groupSize) * 1.0e6f) / us : 0.0f, std::memory_order_relaxed);
     m_groupCount = 0;
