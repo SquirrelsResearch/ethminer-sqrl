@@ -65,7 +65,7 @@ private:
     void autoTune();
     atomic<timePoint> _lastTuneTime = {std::chrono::steady_clock::now()};
     atomic<bool> _maxFreqReached = {false};
-    std::vector<int> _freqSteps = {300, 309, 320, 331, 342, 355, 369, 384, 400, 417, 436, 457, 480};
+    std::vector<int> _freqSteps = {300, 309, 320, 331, 342, 355, 369, 384, 400, 417, 436, 457, 480, 505, 533, 564, 600};
 };
 
 
