@@ -958,8 +958,9 @@ SQRLAXIResult SQRLAXIWaitForInterrupt(SQRLAXIRef self, uint8_t interrupt, uint64
           SQRLMutexUnlock(&self->iMutex);
 	  return SQRLAXIResultOK;
 	}
-	if (self->iPkts[ptr].respTimedOut == 0) {
+	if (self->iPkts[ptr].respTimedOut == 1) {
           // A "Kick" interrupt was issued
+          SQRLMutexUnlock(&self->iMutex);
 	  return SQRLAXIResultTimedOut;
 	}
       }
