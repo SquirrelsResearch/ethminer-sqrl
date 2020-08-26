@@ -24,7 +24,7 @@ along with ethminer.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <functional>
 
-
+//#pragma optimize("", off)
 namespace dev
 {
 namespace eth
@@ -32,7 +32,7 @@ namespace eth
 class SQRLMiner : public Miner
 {
 public:
-    SQRLMiner(unsigned _index, SQSettings _settings, DeviceDescriptor& _device);
+    SQRLMiner(unsigned _index, SQSettings _settings, DeviceDescriptor& _device, TelemetryType* telemetry);
     ~SQRLMiner() override;
 
     static unsigned getNumDevices(SQSettings _settings);
@@ -52,6 +52,7 @@ private:
     atomic<bool> m_dagging = {false};
     void workLoop() override;
     SQSettings m_settings;
+    
 
     double getClock();
     double setClock(double targetClk);
@@ -63,9 +64,16 @@ private:
     // auto tune
     typedef std::chrono::steady_clock::time_point timePoint;
     void autoTune();
-    atomic<timePoint> _lastTuneTime = {std::chrono::steady_clock::now()};
-    atomic<bool> _maxFreqReached = {false};
+    void clearSolutionStats();
+    SolutionAccountType getSolutions();
+    atomic<timePoint> m_lastTuneTime = {std::chrono::steady_clock::now()};
+    atomic<bool> m_maxFreqReached = {false};
+    atomic<bool> m_stableFreqFound = {false};
     std::vector<int> _freqSteps = {300, 309, 320, 331, 342, 355, 369, 384, 400, 417, 436, 457, 480, 505, 533, 564, 600};
+
+    TelemetryType* _telemetry;
+
+
 };
 
 

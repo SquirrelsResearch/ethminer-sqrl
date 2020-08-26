@@ -115,8 +115,8 @@ struct SQRLChannel : public LogChannel
 #define sqrllog clog(SQRLChannel)
 
 
-SQRLMiner::SQRLMiner(unsigned _index, SQSettings _settings, DeviceDescriptor& _device)
-  : Miner("sqrl-", _index), m_settings(_settings)
+SQRLMiner::SQRLMiner(unsigned _index, SQSettings _settings, DeviceDescriptor& _device, TelemetryType* telemetry)
+  : Miner("sqrl-", _index), m_settings(_settings), _telemetry(telemetry)
 {
     m_deviceDescriptor = _device;
 }
@@ -249,7 +249,7 @@ bool SQRLMiner::initEpoch_internal()
     // m_epochContext.lightSize
     // m_epochContext.dagSize
     // m_epochContext.lightCache
-    _lastTuneTime = std::chrono::steady_clock::now();
+   
     m_dagging = true;   
     axiMutex.lock();
     sqrllog << "Changing to Epoch " << m_epochContext.epochNumber; 
@@ -461,6 +461,10 @@ bool SQRLMiner::initEpoch_internal()
     }
 
     axiMutex.unlock();
+
+
+     m_lastTuneTime = std::chrono::steady_clock::now();
+
     return true;
 }
 
@@ -643,7 +647,7 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
         // Update the hash rate
         updateHashRate(newTChks, 1);
 
-        if (m_settings.autoTune)
+        if (m_settings.autoTune > 0)
             autoTune();
 
 	if (shouldReset) break; // Let core reset
@@ -653,66 +657,132 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
     axiMutex.unlock();
 
 }
-// Check current hashrate and if it's stable for given time (60sec), try higher clock. If not, lower the clock.
-void SQRLMiner::autoTune() {
-
+/*
+1. Move frequency up until 0 target checks or invalids, then back off one tick (inc 0.125 on divider)
+2. Start with ~60%, increase intensity or binary search until you find the local maxima. Do this with patience 1
+3. Set patience up by 1, search +/- 2/3 inn values for a new local maxima
+4. Repeat until patience makes it worse
+*/
+void SQRLMiner::autoTune()
+{
     auto elapsedSeconds = std::chrono::duration_cast<std::chrono::seconds>(
-        std::chrono::steady_clock::now() - (timePoint)_lastTuneTime)
+        std::chrono::steady_clock::now() - (timePoint)m_lastTuneTime)
                               .count();
-    if (elapsedSeconds > 60)
+
+    float stabilityThreshold = 10;    // mhs
+    float errorRateThreshold = 0.03;  // 3%
+    int tuningShareCount = 100;   // how many low shares to check to derive average from
+
+    float hash = RetrieveHashRate();
+    float mhs = hash / pow(10, 6);
+    auto it = std::find(_freqSteps.begin(), _freqSteps.end(), m_lastClk);
+    auto currentStepIndex = std::distance(_freqSteps.begin(), it);
+
+    // Stage 1: Do a quick tune to get max frequency
+    if (m_settings.autoTune >= 1)
     {
-        float hash = RetrieveHashRate();
-        float mhs = hash / pow(10, 6);
-
-        auto it = std::find(_freqSteps.begin(), _freqSteps.end(), m_lastClk);
-        if (it == _freqSteps.end())
+        if (elapsedSeconds > 60)
         {
-            sqrllog << EthRed << "Could not find starting index, stopping...";
-            return;
-        }
-
-        auto currentStepIndex = std::distance(_freqSteps.begin(), it);
-       
-        if (mhs > 10)  // assume above 10 mhs -> stable, can try higher clock
-        {
-            if (!_maxFreqReached)
+            if (it == _freqSteps.end())
             {
-                if (currentStepIndex != _freqSteps.size() - 1) //not getting out of bounds
+                sqrllog << EthRed << "S1: Could not find starting index, stopping...";
+                return;
+            }
+
+            if (mhs > stabilityThreshold)  // assume above threshold mhs -> stable, can try higher
+                                           // clock
+            {
+                if (!m_maxFreqReached)
                 {
-                    int nextClock = _freqSteps[currentStepIndex + 1]+1;//+1 for precision issues
-                    sqrllog << "Stable at " << m_lastClk << "MHz, trying " << nextClock-1 << "...";
+                    if (currentStepIndex != _freqSteps.size() - 1)  // not getting out of bounds
+                    {
+                        int nextClock =
+                            _freqSteps[currentStepIndex + 1] + 1;  //+1 for precision issues
+                        sqrllog << "S1: Stable at " << m_lastClk << "MHz, trying " << nextClock - 1
+                                << "...";
+                        setClock(nextClock);
+                        m_lastClk = nextClock - 1;
+                    }
+                    else
+                    {
+                        sqrllog << "Clocking out of bounds, max frequency reached!";
+                        m_maxFreqReached = true;
+                    }
+                }
+            }
+            else  // Unstable, downclock...
+            {
+                m_maxFreqReached = true;
+                if (currentStepIndex > 0)
+                {
+                    int nextClock = _freqSteps[currentStepIndex - 1] + 1;  //+1 for precision issues
+                    sqrllog << "S1: Unstable at " << m_lastClk << "MHz, downclocking to "
+                            << nextClock - 1 << "...";
                     setClock(nextClock);
                     m_lastClk = nextClock - 1;
+
+                    clearSolutionStats();
+                }
+                else
+                    sqrllog << "S1: Clocking out of bounds, min frequency reached!";
+            }
+
+
+            m_lastTuneTime = std::chrono::steady_clock::now();
+        }
+    }
+    if (m_settings.autoTune >= 2)
+    {
+        // Stage 2: Check for long term stability and error rate (removes marginally stable)
+        if (m_maxFreqReached && !m_stableFreqFound)
+        {
+            // calculate error rate
+            SolutionAccountType solutions = getSolutions();
+
+            if (solutions.low > 0 && solutions.low % tuningShareCount == 0)
+            {
+                float errorRate = (float)solutions.failed / (solutions.low + solutions.failed);
+
+                if (errorRate > errorRateThreshold)
+                {
+                    sqrllog << "S2: Error rate of " << errorRate * 100 << "% above threshold ("
+                            << errorRateThreshold * 100 << "%), downclocking...";
+                    int nextClock = _freqSteps[currentStepIndex - 1] + 1;  //+1 for precision issues
+                    setClock(nextClock);
+                    m_lastClk = nextClock - 1;
+
+                    clearSolutionStats();
                 }
                 else
                 {
-                    sqrllog << "Clocking out of bounds, max frequency reached!";
-                    _maxFreqReached = true;
+                    sqrllog << "S2: Stable long term frequency found at " << m_lastClk << "MHz";
+                    m_stableFreqFound = true;
                 }
             }
         }
-        else // Unstable, downclock...
-        {
-            _maxFreqReached = true;
-            if (currentStepIndex > 0)
-            {
-                int nextClock = _freqSteps[currentStepIndex - 1]+1; //+1 for precision issues
-                sqrllog << "Unstable at " << m_lastClk << "MHz, downclocking to " << nextClock-1<< "...";
-                setClock(nextClock);
-                m_lastClk = nextClock - 1;
-            }
-            else
-                sqrllog << "Clocking out of bounds, min frequency reached!";
-     
-        }
-
-       // sqrllog << isStable << " elapsed hash="<<mhs;
-        _lastTuneTime = std::chrono::steady_clock::now();
     }
+    if (m_settings.autoTune >= 3)
+    {
+        // Stage 3: Tune intensity
+        if (m_stableFreqFound)
+        {
 
+        }
+    }
     
 }
+void SQRLMiner::clearSolutionStats() {
+    _telemetry->miners.at(m_index).solutions.accepted = 0;
+    _telemetry->miners.at(m_index).solutions.failed = 0;
+    _telemetry->miners.at(m_index).solutions.low = 0;
+    _telemetry->miners.at(m_index).solutions.rejected = 0;
+    _telemetry->miners.at(m_index).solutions.wasted = 0;
+}
 
+SolutionAccountType SQRLMiner::getSolutions()
+{
+    return _telemetry->miners.at(m_index).solutions;
+}
 double SQRLMiner::getClock() {
   return setClock(-1);
 }

@@ -135,7 +135,7 @@ struct SQSettings : public MinerSettings
    unsigned jcVCCINT = 0; // 0 == no action
    bool dieOnError = false;
    unsigned dagMixers = 16;
-   bool autoTune;
+   unsigned autoTune = 0;// 0 - no auto-tune, 1 - just reach max stable freq, 2 - downclock till low errror rate, 3 - tune intensity, 4- downclock voltage
 };
 
 struct SolutionAccountType

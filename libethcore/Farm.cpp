@@ -312,7 +312,7 @@ bool Farm::start()
             {
                 minerTelemetry.prefix = "sq";
                 m_miners.push_back(std::shared_ptr<Miner>(
-                    new SQRLMiner(m_miners.size(), m_SQSettings, it->second)));
+                    new SQRLMiner(m_miners.size(), m_SQSettings, it->second, &m_telemetry)));
             }
 #endif
             if (minerTelemetry.prefix.empty())
