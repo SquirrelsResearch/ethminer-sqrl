@@ -643,7 +643,7 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
 	}
 
         // Update the hash rate
-        updateHashRate(newTChks, 1);
+        updateHashRate(1,newTChks);
 	if (shouldReset) break; // Let core reset
     }
     // Ensure core is in reset
