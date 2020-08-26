@@ -951,12 +951,16 @@ SQRLAXIResult SQRLAXIWaitForInterrupt(SQRLAXIRef self, uint8_t interrupt, uint64
 			      (((uint64_t)self->iPkts[ptr].rawResp[9]) << 0ULL);
 	  found = ((self->iPkts[ptr].rawResp[0] & (1 << (interrupt+4))) != 0);
 	}
-	if (ptr == self->iPktRd) {
+	if ((ptr == self->iPktRd) || ((self->iPkts[ptr].respValid == 0) && self->iPkts[ptr].respTimedOut)) {
           self->iPktRd++;
 	}
 	if (found) {
           SQRLMutexUnlock(&self->iMutex);
 	  return SQRLAXIResultOK;
+	}
+	if (self->iPkts[ptr].respTimedOut == 0) {
+          // A "Kick" interrupt was issued
+	  return SQRLAXIResultTimedOut;
 	}
       }
     }
@@ -982,6 +986,23 @@ SQRLAXIResult SQRLAXIWaitForInterrupt(SQRLAXIRef self, uint8_t interrupt, uint64
     waited = true;
   }
   return SQRLAXIResultTimedOut; 
+}
+
+SQRLAXIResult SQRLAXIKickInterrupts(SQRLAXIRef self) {
+  SQRLMutexLock(&self->iMutex);
+  // Insert a "ForcedTimeout" interrupt into the queue
+  self->iPkts[self->iPktWr].respRcvd = 1;
+  self->iPkts[self->iPktWr].respValid = 0; 
+  self->iPkts[self->iPktWr].respTimedOut = 1;
+  self->iPktWr++;
+  // Alert any blockers 
+#ifdef _WIN32
+  WakeAllConditionVariable(&self->iCond);
+#else
+  pthread_cond_broadcast(&self->iCond);
+#endif
+  SQRLMutexUnlock(&self->iMutex);
+  return SQRLAXIResultOK;
 }
 
 uint16_t ModRTU_CRC(uint8_t * buf, int len)

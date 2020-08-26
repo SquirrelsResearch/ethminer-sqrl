@@ -478,7 +478,10 @@ void SQRLMiner::kick_miner()
     // Just put the core in reset
     if (!m_dagging) {
       // This can happen on odd thread
-      //SQRLAXIWrite(m_axi, 0x0, 0x506c, false);
+      // Stop mining if we are mining
+      SQRLAXIWrite(m_axi, 0x0, 0x506c, false);
+      // Immediately wake from any interrupts
+      SQRLAXIKickInterrupts(m_axi);
     }
     m_new_work_signal.notify_one();
 }
