@@ -108,7 +108,7 @@ private:
     IntensitySettings m_intensitySettings;
     atomic<bool> m_intensityTuning = {false};
     vector<pair<IntensitySettings, double>> m_shareTimes; // how many target checks in set time
-    std::vector<float> _throughputTargets = {0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.92};
+    std::vector<double> _throughputTargets = {0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.92};
     uint8_t m_firstPassIndex = 0;
     uint8_t m_secondPassLowerN = 0;
     uint8_t m_secondPassUpperN = 0;
