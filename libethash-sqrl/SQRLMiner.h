@@ -24,6 +24,9 @@ along with ethminer.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <functional>
 
+
+#define format2decimal(x) boost::str(boost::format(" %0.2fV") % x)
+
 namespace dev
 {
 namespace eth

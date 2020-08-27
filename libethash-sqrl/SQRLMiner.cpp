@@ -1237,10 +1237,14 @@ void SQRLMiner::getTelemetry(unsigned int *tempC, unsigned int *fanprct, unsigne
   float voltage = _telemetry->miners.at(m_index).sensors.powerW; //TODO: Check if can get directly from tempc%powerW
   int temp = _telemetry->miners.at(m_index).sensors.tempC;
   //Average hashrates
-  sqrllog << EthTeal << "sqrl-" << m_index << EthLime << " Avg 1m:" << m_avgValues[0]
-          << " 10m:" << m_avgValues[1] << " 60m:" << m_avgValues[2] << "Mhs" << EthPurple
-          << " Err=" << m_avgValues[3] << "% [" << m_intensitySettings.to_string() << "] "
-          << EthWhite << m_lastClk << "MHz " << voltage << "V " << temp << "C " << s.str();
+  sqrllog << EthTeal << "sqrl-" << m_index << EthLime 
+          << " Avg 1m:" << format2decimal(m_avgValues[0])
+          << " 10m:" << format2decimal(m_avgValues[1]) 
+          << " 60m:" << format2decimal(m_avgValues[2]) << "Mhs" 
+          << EthPurple << " Err=" << format2decimal(m_avgValues[3]) 
+          << "% [" << m_intensitySettings.to_string() << "] "
+          << EthWhite << m_lastClk << "MHz " << format2decimal(voltage)
+          << "V " << temp << "C " << s.str();
 
   if (leftCatastrophic | rightCatastrophic | !leftCalibrated | !rightCalibrated) {
     // Power down all cores
