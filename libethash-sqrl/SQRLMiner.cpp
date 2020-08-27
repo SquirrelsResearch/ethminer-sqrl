@@ -757,6 +757,12 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
 */
 void SQRLMiner::autoTune()
 {
+
+     if (std::find(m_settings.exclude.begin(), m_settings.exclude.end(), m_index) !=
+        m_settings.exclude.end())  // if FPGA is excluded from tuning - don't bother
+        return;
+
+
     //Stage 1:
     int stage1_averageSeconds = 60;
     float stabilityThreshold = 20;  // mhs
@@ -862,9 +868,7 @@ void SQRLMiner::autoTune()
 
     if (m_settings.autoTune >= 3 && !m_intensityTuneFinished)   
     {       
-        if (std::find(m_settings.exclude.begin(), m_settings.exclude.end(), m_index) !=
-            m_settings.exclude.end()) // if FPGA is excluded from tuning - don't bother with Stage 3
-            return;
+       
 
             if (m_stableFreqFound)
             {
@@ -1044,17 +1048,34 @@ void SQRLMiner::autoTune()
     {
         if (elapsedSeconds > 60)
         {
-            double avgMinuteHash = (m_hashCounter / stage3_averageSeconds) / pow(10, 6);
+            double avgMinuteHash = (m_hashCounter / 60) / pow(10, 6);
             float errorRate = getHardwareErrorRate()*100;
-           
-            sqrllog << EthTealBold << "Avg 1m:" << avgMinuteHash << "Mhs, Errors=" << errorRate
+
+            m_10minHashAvg.push_back(avgMinuteHash);
+            m_60minHashAvg.push_back(avgMinuteHash);
+            if (m_10minHashAvg.size() > 10)
+                m_10minHashAvg.erase(m_10minHashAvg.begin());  // pop front
+
+            if (m_60minHashAvg.size() > 60)
+                m_10minHashAvg.erase(m_60minHashAvg.begin());  // pop front
+
+            double avg10min = average(m_10minHashAvg);
+            double avg60min = average(m_60minHashAvg);
+                 
+            sqrllog << EthTealBold << "Avg 1m:" << avgMinuteHash << "10m:"<<avg10min<<" 60m:"<<avg60min<<"Mhs, Errors=" << errorRate
                     << "%, Intensity ["
                     << m_intensitySettings.to_string() << "] " << m_lastClk<<"MHz";
             m_lastTuneTime = std::chrono::steady_clock::now();
             m_hashCounter = 0;
+
+         
         }
     }
     
+}
+double SQRLMiner::average(std::vector<double> const& v)
+{
+    return std::accumulate(v.begin(), v.end(), 0.0) / v.size();
 }
 int SQRLMiner::findBestIntensitySoFar()
 {

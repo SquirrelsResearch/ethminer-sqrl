@@ -84,6 +84,7 @@ private:
     // auto tune
     typedef std::chrono::steady_clock::time_point timePoint;
     void autoTune();
+    double average(std::vector<double> const& v);
     void clearSolutionStats();
     int findBestIntensitySoFar();
     float getHardwareErrorRate();
@@ -107,6 +108,8 @@ private:
     pair<IntensitySettings, double> m_bestSettingsSoFar;
     bool m_bestIntensityRangeFound = false;
     bool m_intensityTuneFinished = false;
+    vector<double> m_10minHashAvg;
+    vector<double> m_60minHashAvg;
 };
 
 
