@@ -900,8 +900,7 @@ void SQRLMiner::autoTune()
 
                         m_shareTimes.push_back(p);
                         sqrllog << EthOrange << "S3: [" << m_intensitySettings.to_string()
-                                << "] errorRate=" << errorRate
-                                << " Hashrate=" << m_hashCounter / stage3_averageSeconds
+                                << "] errorRate=" << errorRate << " Hashrate=" << adjustedHash
                                 << " throughput=" << throughput * 100 << "%";
 
 
@@ -961,7 +960,7 @@ void SQRLMiner::autoTune()
 
                                       uint8_t diff = m_secondPassUpperN - m_secondPassLowerN;
                                       int stepSize = diff / 5;
-                                      if (stepSize < 0)
+                                      if (stepSize <= 0)
                                           stepSize = 1;
                                       m_secondPassStepSizeN = stepSize;
 
@@ -1041,7 +1040,8 @@ void SQRLMiner::autoTune()
         {
             double avgMinuteHash = (m_hashCounter / stage3_averageSeconds) / pow(10, 6);
            
-            sqrllog << EthBlueBold << "Avg 1m:" << avgMinuteHash << "MHs with intensity ["<<m_intensitySettings.to_string() <<"] ";
+            sqrllog << EthTealBold << "Avg 1m:" << avgMinuteHash
+                    << "MHs with intensity [" << m_intensitySettings.to_string() << "] ";
             m_lastTuneTime = std::chrono::steady_clock::now();
             m_hashCounter = 0;
         }
