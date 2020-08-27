@@ -24,7 +24,6 @@ along with ethminer.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <functional>
 
-//#pragma optimize("", off)
 namespace dev
 {
 namespace eth
@@ -54,13 +53,10 @@ public:
     ~SQRLMiner() override;
 
     static unsigned getNumDevices(SQSettings _settings);
-    static void enumDevices(
-        std::map<string, DeviceDescriptor>& _DevicesCollection, SQSettings _settings);
+    static void enumDevices(std::map<string, DeviceDescriptor>& _DevicesCollection, SQSettings _settings);
 
     void search(const dev::eth::WorkPackage& w);
-    void getTelemetry(unsigned int* tempC, unsigned int* fanprct, unsigned int* powerW) override;
-
-   
+    void getTelemetry(unsigned int *tempC, unsigned int *fanprct, unsigned int *powerW) override;
 
 protected:
     bool initDevice() override;
@@ -74,8 +70,10 @@ private:
     atomic<bool> m_dagging = {false};
     void workLoop() override;
     SQSettings m_settings;
-    
-
+	double VoltageTbl[256] = { 0.0 };
+	void InitVoltageTbl(void);
+	uint8_t FindClosestVIDToVoltage(double ReqVoltage);
+	double LookupVID(uint8_t VID);
     double getClock();
     double setClock(double targetClk);
 

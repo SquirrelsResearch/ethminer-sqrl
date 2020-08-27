@@ -136,6 +136,78 @@ SQRLMiner::~SQRLMiner()
     }
 }
 
+// Full formula (VID being a voltage ID from 0 - 255, inclusive):
+// Original r1 calculation:
+// double r1 = 1.0 / (1.0 / 8.87 + 1.0 / 8.87);								// R101 || R29
+
+// Optimized r1 calculation:
+// double r1 = 4.435														// (optimized)
+
+// double r2 = 20.0;														// R30
+// double rSeries = 10.0;													// R81
+// double rRheoMax = 50.0;													// +/- 20%
+
+// Original r2Adj calculation:
+// double r2Adj = 1.0 / ((1.0 / r2) + (1.0 / (rSeries + (rRheoMax / 256.0 * (double)(VID)))));
+
+// Modified r2Adj calculation with constants substituted in:
+// double r2Adj = 1.0 / ((1.0 / 20.0) + (1.0 / (10.0 + (50.0 / 256.0 * (double)(VID)))));
+
+// Optimized r2Adj calculation
+// double r2Adj = 20 - (2048 / (x + 153.6))
+
+// Original voltage calculation:
+// double voltage = 0.6 * (1.0 + (r1 / r2Adj);
+
+// Modified voltage calculation with constants substituted in:
+// double voltage = 0.6 * (1.0 + (4.435 / r2Adj))
+
+// Optimized voltage calculation:
+// double voltage = 0.6 + (2.661 / r2Adj)
+
+// Total optimized voltage calculation:
+// double voltage = 0.6 + (2.661 / (20 - (2048 / (VID + 153.6))))
+
+// Populate a voltage table of 255 entries, containing
+// the voltage (in volts) for every possible VID, which
+// ranges from 0 - 255 (inclusive.)
+void SQRLMiner::InitVoltageTbl()
+{
+	for(uint8_t VID = 0x00; VID < 0xFF; ++VID)
+	{	  
+		SQRLMiner::VoltageTbl[VID] = 0.6 + (2.661 / (20 - (2048 / (((double)VID + 153.6)))));
+	}
+
+	// Fill last table entry with the correct voltage at VID 0xFF
+	SQRLMiner::VoltageTbl[0xFF] = 0.6 + (2.661 / (20 - (2048 / (255.0 + 153.6))));
+}
+
+// Returns VID which will yield the voltage closest to the value requested.
+// Uses a binary search pattern after the usual sanity checks.
+uint8_t SQRLMiner::FindClosestVIDToVoltage(double ReqVoltage)
+{
+	uint8_t idx = 0x80;
+		
+	// Normal idiot checks - including ensuring the requested voltage
+	// is both above the minimum, yet below the maximum...
+	if((ReqVoltage < SQRLMiner::VoltageTbl[0xFF]) || (ReqVoltage > SQRLMiner::VoltageTbl[0x00]))
+		return(0x00);
+	
+	for(int half = 0x40; half > 0x00; half >>= 1)
+	{
+		// Binary search the table
+		if(ReqVoltage < SQRLMiner::VoltageTbl[idx]) idx += half;
+		else if(ReqVoltage > SQRLMiner::VoltageTbl[idx]) idx -= half;
+		else if(ReqVoltage == SQRLMiner::VoltageTbl[idx]) return(idx);	
+	}
+	
+	return(idx);
+}
+
+double SQRLMiner::LookupVID(uint8_t VID)
+{
+	return(SQRLMiner::VoltageTbl[VID]);
+}
 
 bool SQRLMiner::initDevice()
 {
@@ -171,22 +243,18 @@ bool SQRLMiner::initDevice()
       s << setfill('0') << setw(8) << std::hex << bitstream;
       sqrllog << "Bitstream: " << s.str();
 
+      InitVoltageTbl();
+
       // Set voltage if asked
-      if (m_settings.fkVCCINT > 500) {
-	double r1           = 1.0 / (1.0 / 8.87 + 1.0 / 8.87); // R101 || R29
-        double r2           = 20.0; // R30
-	double rSeries      = 10.0; // R81
-	double rRheostatMax = 50.0; // +- 20%
-	uint8_t tWiper=0x44;
-	unsigned tmv=850;
-	for(uint8_t wiperCode=0; wiperCode < 0xFF; wiperCode++) {
-	  double r2Adj = 1.0 / ((1.0 / r2) + (1.0 / (rSeries + (rRheostatMax / 256.0 * (double)(wiperCode)))));
-	  double v = 0.6 * (1.0 + (r1 / r2Adj));
-	  if ((v * 1000) >= m_settings.fkVCCINT) {
-            tWiper = wiperCode;
-	    tmv = (v*1000);
-	  }
-	}
+      if (m_settings.fkVCCINT > 500)
+      {
+		uint32_t tmv;
+		uint8_t tWiper = FindClosestVIDToVoltage(((double)m_settings.fkVCCINT / 1000.0));
+		if(!tWiper) tWiper = 0x44;
+		tmv = (uint32_t)(LookupVID(tWiper) * 1000.0);
+	 
+		sqrllog << "Found wiper code " << to_string(tWiper) << " for voltage " << to_string(tmv) << "mV.\n";
+	    
         sqrllog << "Instructing FK VRM, if present, to target " << m_settings.fkVCCINT << "mv";
         sqrllog << "Closest Viable Voltage " << tmv << "mv";
         SQRLAXIWrite(m_axi, 0xA, 0x9040, false); 	
@@ -490,7 +558,10 @@ void SQRLMiner::kick_miner()
     // Just put the core in reset
     if (!m_dagging) {
       // This can happen on odd thread
-      //SQRLAXIWrite(m_axi, 0x0, 0x506c, false);
+      // Stop mining if we are mining
+      SQRLAXIWrite(m_axi, 0x0, 0x506c, false);
+      // Immediately wake from any interrupts
+      SQRLAXIKickInterrupts(m_axi);
     }
     m_new_work_signal.notify_one();
 }
@@ -524,14 +595,12 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
     if (err != 0) sqrllog << "Failed setting ethcore nonceStartLow";
 
     uint32_t flags = 0;
-    if (m_intensitySettings.patience != 0)
-    {
-        flags |= (1 << 6) | ((m_intensitySettings.patience & 0xff) << 8); 
+    if (m_settings.patience != 0) {
+      flags |= (1 << 6) | ((m_settings.patience & 0xff) << 8); 
     }
-    if (m_intensitySettings.intensityN != 0)
-    {
-        flags |= (1 << 0) | ((m_intensitySettings.intensityN & 0xFF) << 24);
-        flags |= (((m_intensitySettings.intensityD & 0x3F) * 8 - 1) << 16);
+    if (m_settings.intensityN != 0) {
+      flags |= (1 << 0) | ((m_settings.intensityN & 0xFF) << 24);
+      flags |= (((m_settings.intensityD & 0x3F)*8 -1) << 16);
     }
     err = SQRLAXIWrite(m_axi, flags, 0x5080, false);
     if (err != 0) {
@@ -634,15 +703,23 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
 	SQRLAXIRead(m_axi, &tChkLo, 0x5048);
 	SQRLAXIRead(m_axi, &tChkHi, 0x5044);
 	uint64_t tChks = ((uint64_t)tChkHi << 32) + tChkLo;
-	if (tChks < lastTChecks) tChkHi++; // Cheap rollover detection
-	uint64_t newTChks = tChks - lastTChecks;
+
+	uint64_t newTChks = 0;
+	if (!((tChkLo == 0) && (tChkHi == 0))) {
+	  if (tChks < lastTChecks) {
+            tChkHi++; // Cheap rollover detection
+	    tChks = ((uint64_t)tChkHi << 32) + tChkLo;
+	  }
+	  newTChks = tChks - lastTChecks;
+	}
 	lastTChecks = tChks; 
+
 	uint8_t shouldReset = 0;
 	if (!m_settings.skipStallDetection && (sCnt == lastSCnt)) {
           // Reset the core, re-init nonceStart 
 	  shouldReset = 1;
 	}
-
+	lastSCnt = sCnt;
 
 	for (int i=0; i < 4; i++) {
           if (nonceValid[i]) {
@@ -655,7 +732,7 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
 	}
    
         // Update the hash rate
-        updateHashRate(newTChks, 1);
+        updateHashRate(1, newTChks);
 
         if (m_settings.autoTune > 0)
         {
@@ -1007,6 +1084,9 @@ double SQRLMiner::getClock() {
 double SQRLMiner::setClock(double targetClk) {
   uint32_t valueVCO;
   SQRLAXIRead(m_axi, &valueVCO, 0x8200);
+  // You can force VCO values here - be aware it also affects APB bus clock
+  //valueVCO &= 0xFF0000FF;
+  //valueVCO |= 0x007d0700;
   double mult = (double)((valueVCO>>8) &0xFF);
   double frac = 0;
   if ((valueVCO >> 16) & 0x2F) {
@@ -1044,6 +1124,7 @@ double SQRLMiner::setClock(double targetClk) {
       sqrllog << "CoreClk would exceed limit"; 
     } else {
       uint32_t newDiv = ((uint8_t)desiredDiv) | ((uint16_t)((desiredDiv-floor(desiredDiv))*1000.0) << 8);
+      SQRLAXIWrite(m_axi, valueVCO, 0x8200, true);
       SQRLAXIWrite(m_axi, newDiv, 0x8208, true);
       SQRLAXIWrite(m_axi, 0x7, 0x825c, true);
       SQRLAXIWrite(m_axi, 0x3, 0x825c, true);
@@ -1094,7 +1175,39 @@ void SQRLMiner::getTelemetry(unsigned int *tempC, unsigned int *fanprct, unsigne
   (*fanprct) = getClock(); 
   SQRLAXIRead(m_axi, &raw, 0x3404);
   (*powerW) = ((double)raw * 3.0 / 65536.0) * 1000.0;
+
+  // Read the HBM stack control values
+  SQRLAXIRead(m_axi, &raw, 0x7008);
   axiMutex.unlock();
+  // Left CAL, Right CL, Left CAT, Left 7 bit, Right CAT (Meow), Right 7bit 
+  bool leftCalibrated = ((raw >> 0) & 1)?true:false;
+  bool rightCalibrated = ((raw >> 1) & 1)?true:false;
+  bool leftCatastrophic = ((raw >> 2) & 1)?true:false;
+  bool rightCatastrophic = ((raw >> 10) & 1)?true:false;
+  uint8_t leftTemp = (raw >> 3) & 0x7f;
+  uint8_t rightTemp = (raw >> 11) & 0x7f;
+  if (m_settings.showHBMStats || leftTemp > 70 || rightTemp > 70 || leftCatastrophic || rightCatastrophic) {
+    sqrllog << EthTeal << "sqrl-" << m_index << EthOrange << " HBM " 
+	    << (leftCalibrated?"":"LCAL: 0 ")
+	    << (rightCalibrated?"":"RCAL: 0 ")
+	    << (leftCatastrophic?"LCATTRIP: ":"")
+	    << (rightCatastrophic?"RCATTRIP: ":"")
+	    << (int)leftTemp << "C " 
+    	    << (int)rightTemp << "C";
+  }
+  if (leftCatastrophic | rightCatastrophic | !leftCalibrated | !rightCalibrated) {
+    // Power down all cores
+    SQRLAXIWrite(m_axi, 0x0, 0x506c, true);
+    SQRLAXIWrite(m_axi, 0x0, 0xB000, true);
+    // Forces a stall
+    if (leftCatastrophic | rightCatastrophic) {
+      sqrllog << EthRed << "HBM STACK CATASTROPHIC TEMP - Powered Off, Refusing Work";
+    } else {
+      sqrllog << EthRed << "HBM Calibration Failed - Refusing Work";
+    }
+    m_dagging = true;
+    kick_miner();
+  }
 } 
 
 
