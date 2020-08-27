@@ -890,7 +890,8 @@ void SQRLMiner::autoTune()
 
                         pair<IntensitySettings, double> p;
 
-                        double adjustedHash = m_hashCounter * (1 - errorRate);
+                        double adjustedHash =
+                            (m_hashCounter / stage3_averageSeconds) * (1 - errorRate);
                         p = std::make_pair(m_intensitySettings, adjustedHash);  // penalize for
                                                                                 // producing errors
 
@@ -1025,7 +1026,7 @@ void SQRLMiner::autoTune()
                             }
                         }
                         sqrllog << EthBlueBold << "Average hashrate during tuning period="
-                                << (m_hashCounter / stage3_averageSeconds) / pow(10, 7) << "MHs";
+                                << (m_hashCounter / stage3_averageSeconds) / pow(10, 6) << "MHs";
                         m_lastTuneTime = std::chrono::steady_clock::now();
                         clearSolutionStats();
                     }
@@ -1033,6 +1034,17 @@ void SQRLMiner::autoTune()
             }
         
        
+    }
+    if (m_intensityTuneFinished)
+    {
+        if (elapsedSeconds > stage3_averageSeconds)
+        {
+            double avgMinuteHash = (m_hashCounter / stage3_averageSeconds) / pow(10, 6);
+           
+            sqrllog << EthBlueBold << "Avg 1m:" << avgMinuteHash << "MHs with intensity ["<<m_intensitySettings.to_string() <<"] ";
+            m_lastTuneTime = std::chrono::steady_clock::now();
+            m_hashCounter = 0;
+        }
     }
     
 }
