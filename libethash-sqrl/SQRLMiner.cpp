@@ -595,12 +595,14 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
     if (err != 0) sqrllog << "Failed setting ethcore nonceStartLow";
 
     uint32_t flags = 0;
-    if (m_settings.patience != 0) {
-      flags |= (1 << 6) | ((m_settings.patience & 0xff) << 8); 
+    if (m_intensitySettings.patience != 0)
+    {
+        flags |= (1 << 6) | ((m_intensitySettings.patience & 0xff) << 8); 
     }
-    if (m_settings.intensityN != 0) {
-      flags |= (1 << 0) | ((m_settings.intensityN & 0xFF) << 24);
-      flags |= (((m_settings.intensityD & 0x3F)*8 -1) << 16);
+    if (m_intensitySettings.intensityN != 0)
+    {
+        flags |= (1 << 0) | ((m_intensitySettings.intensityN & 0xFF) << 24);
+        flags |= (((m_intensitySettings.intensityD & 0x3F) * 8 - 1) << 16);
     }
     err = SQRLAXIWrite(m_axi, flags, 0x5080, false);
     if (err != 0) {
@@ -865,7 +867,7 @@ void SQRLMiner::autoTune()
                 if (!m_intensityTuning)  // init
                 {
                     float targetThroughput = _throughputTargets[m_firstPassIndex];
-                    m_intensitySettings.patience = 1;
+                    m_intensitySettings.patience = m_settings.patience;//start with user defined
                     m_intensitySettings.intensityD = 8;
                     m_intensitySettings.intensityN =
                         (int)((m_intensitySettings.intensityD * targetThroughput) /
