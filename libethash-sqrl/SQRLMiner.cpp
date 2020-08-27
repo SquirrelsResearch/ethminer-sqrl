@@ -58,7 +58,7 @@ along with ethminer.  If not, see <http://www.gnu.org/licenses/>.
 #endif
 
 
-#include <SQRLAXI.h>
+#include "SQRLAXI.h"
 
 using namespace std;
 using namespace dev;
