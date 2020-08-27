@@ -761,10 +761,10 @@ void SQRLMiner::autoTune()
     
     //Stage 2:
     float errorRateThreshold = 0.03;  // 3%
-    int tuningShareCount = 100;      // how many low shares to check to derive average from
+    int tuningShareCount = m_settings.tuneTime;  // how many low shares to check to derive average from
 
     //Stage 3:
-    int stage3_averageSeconds = 60;
+    int stage3_averageSeconds = m_settings.tuneTime;
     
     
 
@@ -838,7 +838,7 @@ void SQRLMiner::autoTune()
 
             if (solutions.low > 0 && (solutions.low+solutions.failed) % tuningShareCount == 0)
             {
-                float errorRate = (float)solutions.failed / (solutions.low + solutions.failed);
+                float errorRate = getHardwareErrorRate();
 
                 if (errorRate > errorRateThreshold)
                 {
@@ -900,7 +900,7 @@ void SQRLMiner::autoTune()
 
                         m_shareTimes.push_back(p);
                         sqrllog << EthOrange << "S3: [" << m_intensitySettings.to_string()
-                                << "] errorRate=" << errorRate << " Hashrate=" << adjustedHash
+                                << "] errorRate=" << errorRate*100 << "% Hashrate=" << adjustedHash
                                 << " throughput=" << throughput * 100 << "%";
 
 
@@ -1036,12 +1036,14 @@ void SQRLMiner::autoTune()
     }
     if (m_intensityTuneFinished)
     {
-        if (elapsedSeconds > stage3_averageSeconds)
+        if (elapsedSeconds > 60)
         {
             double avgMinuteHash = (m_hashCounter / stage3_averageSeconds) / pow(10, 6);
+            float errorRate = getHardwareErrorRate()*100;
            
-            sqrllog << EthTealBold << "Avg 1m:" << avgMinuteHash
-                    << "MHs with intensity [" << m_intensitySettings.to_string() << "] ";
+            sqrllog << EthTealBold << "Avg 1m:" << avgMinuteHash << "Mhs, Errors=" << errorRate
+                    << "%, Intensity ["
+                    << m_intensitySettings.to_string() << "] " << m_lastClk<<"MHz";
             m_lastTuneTime = std::chrono::steady_clock::now();
             m_hashCounter = 0;
         }
