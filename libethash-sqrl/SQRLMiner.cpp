@@ -666,6 +666,9 @@ double SQRLMiner::getClock() {
 double SQRLMiner::setClock(double targetClk) {
   uint32_t valueVCO;
   SQRLAXIRead(m_axi, &valueVCO, 0x8200);
+  // You can force VCO values here - be aware it also affects APB bus clock
+  //valueVCO &= 0xFF0000FF;
+  //valueVCO |= 0x007d0700;
   double mult = (double)((valueVCO>>8) &0xFF);
   double frac = 0;
   if ((valueVCO >> 16) & 0x2F) {
@@ -703,6 +706,7 @@ double SQRLMiner::setClock(double targetClk) {
       sqrllog << "CoreClk would exceed limit"; 
     } else {
       uint32_t newDiv = ((uint8_t)desiredDiv) | ((uint16_t)((desiredDiv-floor(desiredDiv))*1000.0) << 8);
+      SQRLAXIWrite(m_axi, valueVCO, 0x8200, true);
       SQRLAXIWrite(m_axi, newDiv, 0x8208, true);
       SQRLAXIWrite(m_axi, 0x7, 0x825c, true);
       SQRLAXIWrite(m_axi, 0x3, 0x825c, true);
@@ -752,7 +756,39 @@ void SQRLMiner::getTelemetry(unsigned int *tempC, unsigned int *fanprct, unsigne
   (*fanprct) = getClock(); 
   SQRLAXIRead(m_axi, &raw, 0x3404);
   (*powerW) = ((double)raw * 3.0 / 65536.0) * 1000.0;
+
+  // Read the HBM stack control values
+  SQRLAXIRead(m_axi, &raw, 0x7008);
   axiMutex.unlock();
+  // Left CAL, Right CL, Left CAT, Left 7 bit, Right CAT (Meow), Right 7bit 
+  bool leftCalibrated = ((raw >> 0) & 1)?true:false;
+  bool rightCalibrated = ((raw >> 1) & 1)?true:false;
+  bool leftCatastrophic = ((raw >> 2) & 1)?true:false;
+  bool rightCatastrophic = ((raw >> 10) & 1)?true:false;
+  uint8_t leftTemp = (raw >> 3) & 0x7f;
+  uint8_t rightTemp = (raw >> 11) & 0x7f;
+  if (m_settings.showHBMStats || leftTemp > 70 || rightTemp > 70 || leftCatastrophic || rightCatastrophic) {
+    sqrllog << EthTeal << "sqrl-" << m_index << EthOrange << " HBM " 
+	    << (leftCalibrated?"":"LCAL: 0 ")
+	    << (rightCalibrated?"":"RCAL: 0 ")
+	    << (leftCatastrophic?"LCATTRIP: ":"")
+	    << (rightCatastrophic?"RCATTRIP: ":"")
+	    << (int)leftTemp << "C " 
+    	    << (int)rightTemp << "C";
+  }
+  if (leftCatastrophic | rightCatastrophic | !leftCalibrated | !rightCalibrated) {
+    // Power down all cores
+    SQRLAXIWrite(m_axi, 0x0, 0x506c, true);
+    SQRLAXIWrite(m_axi, 0x0, 0xB000, true);
+    // Forces a stall
+    if (leftCatastrophic | rightCatastrophic) {
+      sqrllog << EthRed << "HBM STACK CATASTROPHIC TEMP - Powered Off, Refusing Work";
+    } else {
+      sqrllog << EthRed << "HBM Calibration Failed - Refusing Work";
+    }
+    m_dagging = true;
+    kick_miner();
+  }
 } 
 
 
