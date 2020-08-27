@@ -762,7 +762,7 @@ void SQRLMiner::processHashrateAverages(uint64_t newTcks) {
             double avg1min = (m_hashCounter / 60) / pow(10, 6);
             float errorRate = getHardwareErrorRate() * 100;
 
-            if (avg1min > 0 && avg1min < 100) //check for flukes
+            if (avg1min > 10 && avg1min < 100) //check for flukes
             {
                 m_10minHashAvg.push_back(avg1min);
                 m_60minHashAvg.push_back(avg1min);
@@ -771,7 +771,7 @@ void SQRLMiner::processHashrateAverages(uint64_t newTcks) {
                 m_10minHashAvg.erase(m_10minHashAvg.begin());  // pop front
 
             if (m_60minHashAvg.size() > 60)
-                m_10minHashAvg.erase(m_60minHashAvg.begin());  // pop front
+                m_60minHashAvg.erase(m_60minHashAvg.begin());  // pop front
 
             double avg10min = average(m_10minHashAvg);
             double avg60min = average(m_60minHashAvg);
