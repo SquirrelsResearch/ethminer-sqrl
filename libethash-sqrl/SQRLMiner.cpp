@@ -1240,7 +1240,7 @@ void SQRLMiner::getTelemetry(unsigned int *tempC, unsigned int *fanprct, unsigne
   sqrllog << EthTeal << "sqrl-" << m_index << EthLime << " Avg 1m:" << m_avgValues[0]
           << " 10m:" << m_avgValues[1] << " 60m:" << m_avgValues[2] << "Mhs" << EthPurple
           << " Err=" << m_avgValues[3] << "% [" << m_intensitySettings.to_string() << "] "
-          << EthNavy << m_lastClk << "MHz " << voltage << "V " << temp<<"C "<<s.str();
+          << EthWhite << m_lastClk << "MHz " << voltage << "V " << temp << "C " << s.str();
 
   if (leftCatastrophic | rightCatastrophic | !leftCalibrated | !rightCalibrated) {
     // Power down all cores
