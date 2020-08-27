@@ -862,6 +862,10 @@ void SQRLMiner::autoTune()
 
     if (m_settings.autoTune >= 3 && !m_intensityTuneFinished)   
     {       
+        if (std::find(m_settings.exclude.begin(), m_settings.exclude.end(), m_index) !=
+            m_settings.exclude.end()) // if FPGA is excluded from tuning - don't bother with Stage 3
+            return;
+
             if (m_stableFreqFound)
             {
                 if (!m_intensityTuning)  // init

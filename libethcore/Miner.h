@@ -138,6 +138,7 @@ struct SQSettings : public MinerSettings
    unsigned autoTune = 0;// 0 - no auto-tune, 1 - just reach max stable freq, 2 - downclock till low errror rate, 3 - tune intensity, 4- downclock voltage
    unsigned tuneTime = 60;
    bool showHBMStats = true;
+   vector<uint8_t> exclude;
 };
 
 struct SolutionAccountType
