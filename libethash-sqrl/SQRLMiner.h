@@ -56,6 +56,7 @@ public:
     static void enumDevices(std::map<string, DeviceDescriptor>& _DevicesCollection, SQSettings _settings);
 
     void search(const dev::eth::WorkPackage& w);
+    void processHashrateAverages(uint64_t newTcks);
     void getTelemetry(unsigned int *tempC, unsigned int *fanprct, unsigned int *powerW) override;
 
 protected:
@@ -80,10 +81,14 @@ private:
     atomic<double> m_lastClk = {0};
     SQRLAXIRef m_axi = NULL;
     std::mutex axiMutex;
+    double m_hashCounter = 0;
+    double m_avgValues[4]; //1min avg hash, 10min avg hash, 60min avg hash, error rate
+    vector<double> m_10minHashAvg;
+    vector<double> m_60minHashAvg;
 
     // auto tune
     typedef std::chrono::steady_clock::time_point timePoint;
-    void autoTune();
+    void autoTune(uint64_t newTcks);
     double average(std::vector<double> const& v);
     void clearSolutionStats();
     int findBestIntensitySoFar();
@@ -91,6 +96,7 @@ private:
 
     SolutionAccountType getSolutions();
     atomic<timePoint> m_lastTuneTime = {std::chrono::steady_clock::now()};
+    atomic<timePoint> m_avgHashTimer = {std::chrono::steady_clock::now()};
     atomic<bool> m_maxFreqReached = {false};
     atomic<bool> m_stableFreqFound = {false};
     std::vector<int> _freqSteps = {300, 309, 320, 331, 342, 355, 369, 384, 400, 417, 436, 457, 480, 505, 533, 564, 600};
@@ -103,13 +109,13 @@ private:
     uint8_t m_firstPassIndex = 0;
     uint8_t m_secondPassLowerN = 0;
     uint8_t m_secondPassUpperN = 0;
-    double m_hashCounter = {0};
+    double m_tuneHashCounter = {0};
     uint8_t m_secondPassStepSizeN = 0;
     pair<IntensitySettings, double> m_bestSettingsSoFar;
     bool m_bestIntensityRangeFound = false;
     bool m_intensityTuneFinished = false;
-    vector<double> m_10minHashAvg;
-    vector<double> m_60minHashAvg;
+
+
 };
 
 
