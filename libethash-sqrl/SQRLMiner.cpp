@@ -1236,9 +1236,9 @@ void SQRLMiner::getTelemetry(unsigned int *tempC, unsigned int *fanprct, unsigne
   }
 
   //Average hashrates
-  sqrllog << EthTeal << "sqrl-" << m_index << EthTealBold << "Avg 1m:" << m_avgValues[0]
-          << " 10m:" << m_avgValues[1]
-          << " 60m:" << m_avgValues[2] << "Mhs, Errors=" << m_avgValues[3] << "%, Intensity ["
+  sqrllog << EthTeal << "sqrl-" << m_index << EthPurple << " Avg 1m:" << m_avgValues[0]
+          << " 10m:" << m_avgValues[1] << " 60m:" << m_avgValues[2] << "Mhs" << EthOrange
+          << " Errors=" << m_avgValues[3] << "% Intensity ["
           << m_intensitySettings.to_string() << "] " << m_lastClk << "MHz" << s.str();
 
   if (leftCatastrophic | rightCatastrophic | !leftCalibrated | !rightCalibrated) {
