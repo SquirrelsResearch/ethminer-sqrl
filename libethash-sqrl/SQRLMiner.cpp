@@ -687,7 +687,6 @@ void SQRLMiner::autoTune()
     int tuningShareCount = 100;      // how many low shares to check to derive average from
 
     //Stage 3:
-    float upperThroughputThreshold = 0.92;
     int stage3_averageSeconds = 60;
     
     
