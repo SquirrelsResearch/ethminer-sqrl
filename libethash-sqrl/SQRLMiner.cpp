@@ -737,7 +737,7 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
         if (m_settings.autoTune > 0)
         {
             autoTune();
-            m_hashCounter += tChkLo;
+            m_hashCounter += newTChks;
         }
 
 	if (shouldReset) break; // Let core reset
@@ -757,7 +757,7 @@ void SQRLMiner::autoTune()
 {
     //Stage 1:
     int stage1_averageSeconds = 60;
-    float stabilityThreshold = 10;  // mhs
+    float stabilityThreshold = 20;  // mhs
     
     //Stage 2:
     float errorRateThreshold = 0.03;  // 3%
