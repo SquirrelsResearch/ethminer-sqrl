@@ -50,7 +50,10 @@ private:
     atomic<bool> m_dagging = {false};
     void workLoop() override;
     SQSettings m_settings;
-
+	double VoltageTbl[256] = { 0.0 };
+	void InitVoltageTbl(void);
+	uint8_t FindClosestVIDToVoltage(double ReqVoltage);
+	double LookupVID(uint8_t VID);
     double getClock();
     double setClock(double targetClk);
     double m_lastClk = 0;

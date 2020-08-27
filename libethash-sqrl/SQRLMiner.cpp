@@ -136,6 +136,78 @@ SQRLMiner::~SQRLMiner()
     }
 }
 
+// Full formula (VID being a voltage ID from 0 - 255, inclusive):
+// Original r1 calculation:
+// double r1 = 1.0 / (1.0 / 8.87 + 1.0 / 8.87);								// R101 || R29
+
+// Optimized r1 calculation:
+// double r1 = 4.435														// (optimized)
+
+// double r2 = 20.0;														// R30
+// double rSeries = 10.0;													// R81
+// double rRheoMax = 50.0;													// +/- 20%
+
+// Original r2Adj calculation:
+// double r2Adj = 1.0 / ((1.0 / r2) + (1.0 / (rSeries + (rRheoMax / 256.0 * (double)(VID)))));
+
+// Modified r2Adj calculation with constants substituted in:
+// double r2Adj = 1.0 / ((1.0 / 20.0) + (1.0 / (10.0 + (50.0 / 256.0 * (double)(VID)))));
+
+// Optimized r2Adj calculation
+// double r2Adj = 20 - (2048 / (x + 153.6))
+
+// Original voltage calculation:
+// double voltage = 0.6 * (1.0 + (r1 / r2Adj);
+
+// Modified voltage calculation with constants substituted in:
+// double voltage = 0.6 * (1.0 + (4.435 / r2Adj))
+
+// Optimized voltage calculation:
+// double voltage = 0.6 + (2.661 / r2Adj)
+
+// Total optimized voltage calculation:
+// double voltage = 0.6 + (2.661 / (20 - (2048 / (VID + 153.6))))
+
+// Populate a voltage table of 255 entries, containing
+// the voltage (in volts) for every possible VID, which
+// ranges from 0 - 255 (inclusive.)
+void SQRLMiner::InitVoltageTbl()
+{
+	for(uint8_t VID = 0x00; VID < 0xFF; ++VID)
+	{	  
+		SQRLMiner::VoltageTbl[VID] = 0.6 + (2.661 / (20 - (2048 / (((double)VID + 153.6)))));
+	}
+
+	// Fill last table entry with the correct voltage at VID 0xFF
+	SQRLMiner::VoltageTbl[0xFF] = 0.6 + (2.661 / (20 - (2048 / (255.0 + 153.6))));
+}
+
+// Returns VID which will yield the voltage closest to the value requested.
+// Uses a binary search pattern after the usual sanity checks.
+uint8_t SQRLMiner::FindClosestVIDToVoltage(double ReqVoltage)
+{
+	uint8_t idx = 0x80;
+		
+	// Normal idiot checks - including ensuring the requested voltage
+	// is both above the minimum, yet below the maximum...
+	if((ReqVoltage < SQRLMiner::VoltageTbl[0xFF]) || (ReqVoltage > SQRLMiner::VoltageTbl[0x00]))
+		return(0x00);
+	
+	for(int half = 0x40; half > 0x00; half >>= 1)
+	{
+		// Binary search the table
+		if(ReqVoltage < SQRLMiner::VoltageTbl[idx]) idx += half;
+		else if(ReqVoltage > SQRLMiner::VoltageTbl[idx]) idx -= half;
+		else if(ReqVoltage == SQRLMiner::VoltageTbl[idx]) return(idx);	
+	}
+	
+	return(idx);
+}
+
+double SQRLMiner::LookupVID(uint8_t VID)
+{
+	return(SQRLMiner::VoltageTbl[VID]);
+}
 
 bool SQRLMiner::initDevice()
 {
@@ -171,22 +243,18 @@ bool SQRLMiner::initDevice()
       s << setfill('0') << setw(8) << std::hex << bitstream;
       sqrllog << "Bitstream: " << s.str();
 
+      InitVoltageTbl();
+
       // Set voltage if asked
-      if (m_settings.fkVCCINT > 500) {
-	double r1           = 1.0 / (1.0 / 8.87 + 1.0 / 8.87); // R101 || R29
-        double r2           = 20.0; // R30
-	double rSeries      = 10.0; // R81
-	double rRheostatMax = 50.0; // +- 20%
-	uint8_t tWiper=0x44;
-	unsigned tmv=850;
-	for(uint8_t wiperCode=0; wiperCode < 0xFF; wiperCode++) {
-	  double r2Adj = 1.0 / ((1.0 / r2) + (1.0 / (rSeries + (rRheostatMax / 256.0 * (double)(wiperCode)))));
-	  double v = 0.6 * (1.0 + (r1 / r2Adj));
-	  if ((v * 1000) >= m_settings.fkVCCINT) {
-            tWiper = wiperCode;
-	    tmv = (v*1000);
-	  }
-	}
+      if (m_settings.fkVCCINT > 500)
+      {
+		uint32_t tmv;
+		uint8_t tWiper = FindClosestVIDToVoltage(((double)m_settings.fkVCCINT / 1000.0));
+		if(!tWiper) tWiper = 0x44;
+		tmv = (uint32_t)(LookupVID(tWiper) * 1000.0);
+	 
+		sqrllog << "Found wiper code " << to_string(tWiper) << " for voltage " << to_string(tmv) << "mV.\n";
+	    
         sqrllog << "Instructing FK VRM, if present, to target " << m_settings.fkVCCINT << "mv";
         sqrllog << "Closest Viable Voltage " << tmv << "mv";
         SQRLAXIWrite(m_axi, 0xA, 0x9040, false); 	
