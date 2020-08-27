@@ -762,7 +762,7 @@ void SQRLMiner::processHashrateAverages(uint64_t newTcks) {
             double avg1min = (m_hashCounter / 60) / pow(10, 6);
             float errorRate = getHardwareErrorRate() * 100;
 
-            if (avg1min > 0)
+            if (avg1min > 0 && avg1min < 100) //check for flukes
             {
                 m_10minHashAvg.push_back(avg1min);
                 m_60minHashAvg.push_back(avg1min);
@@ -1234,12 +1234,13 @@ void SQRLMiner::getTelemetry(unsigned int *tempC, unsigned int *fanprct, unsigne
 	    << (int)leftTemp << "C " 
     	    << (int)rightTemp << "C";
   }
-
+  float voltage = _telemetry->miners.at(m_index).sensors.powerW; //TODO: Check if can get directly from tempc%powerW
+  int temp = _telemetry->miners.at(m_index).sensors.tempC;
   //Average hashrates
   sqrllog << EthTeal << "sqrl-" << m_index << EthLime << " Avg 1m:" << m_avgValues[0]
           << " 10m:" << m_avgValues[1] << " 60m:" << m_avgValues[2] << "Mhs" << EthPurple
-          << " Err=" << m_avgValues[3] << "%  ["
-          << m_intensitySettings.to_string() << "] " << m_lastClk << "MHz" << s.str();
+          << " Err=" << m_avgValues[3] << "% [" << m_intensitySettings.to_string() << "] "
+          << EthNavy << m_lastClk << "MHz " << voltage << "V " << temp<<"C "<<s.str();
 
   if (leftCatastrophic | rightCatastrophic | !leftCalibrated | !rightCalibrated) {
     // Power down all cores
