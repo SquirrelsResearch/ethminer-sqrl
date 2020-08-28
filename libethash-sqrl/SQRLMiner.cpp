@@ -320,24 +320,30 @@ bool SQRLMiner::initDevice()
 }
 void SQRLMiner::readSavedTunes(string fileName, string settingID)
 {
-    ifstream myfile(fileName);
-    std::string line;
-    while (std::getline(myfile, line))
-    {    
-        std::vector<std::string> words;
-        boost::split(words, line, boost::is_any_of(","), boost::token_compress_on);
-        if (words.size() > 0)
+    try
+    {
+        ifstream myfile(fileName);
+        std::string line;
+        while (std::getline(myfile, line))
         {
-            if (words[0] == settingID)
+            std::vector<std::string> words;
+            boost::split(words, line, boost::is_any_of(","), boost::token_compress_on);
+            if (words.size() > 0)
             {
-                sqrllog << "Found a previous tune!";
-                m_lastClk = stoi(words[1]);
-                m_settings.patience = stoi(words[2]);
-                m_settings.intensityN = stoi(words[3]);
-                m_settings.intensityD = stoi(words[4]);
+                if (words[0] == settingID)
+                {
+                    sqrllog << "Found a previous tune!";
+                    m_lastClk = stoi(words[1]);
+                    m_settings.patience = stoi(words[2]);
+                    m_settings.intensityN = stoi(words[3]);
+                    m_settings.intensityD = stoi(words[4]);
+                }
             }
         }
-
+    }
+    catch (const invalid_argument& e)
+    {
+        sqrllog << EthRed << "Failed to parse tune file! " << e.what();
     }
 }
 bool SQRLMiner::saveTune() {
@@ -346,7 +352,7 @@ bool SQRLMiner::saveTune() {
     if (ofs.is_open())
     {
         sqrllog << EthOrange << "Tune finished, saving tune.txt!";
-        ofs << m_settingID << "," << m_bestSettingsSoFar.first.patience << ","
+        ofs << m_settingID << "," << m_lastClk<<","<< m_bestSettingsSoFar.first.patience << ","
             << m_bestSettingsSoFar.first.intensityN << "," << m_bestSettingsSoFar.first.intensityD
             << endl;
         ofs.close();
