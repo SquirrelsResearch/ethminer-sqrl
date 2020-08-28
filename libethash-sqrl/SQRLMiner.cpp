@@ -341,9 +341,10 @@ void SQRLMiner::readSavedTunes(string fileName, string settingID)
             }
         }
     }
-    catch (const invalid_argument& e)
+    catch (const exception& e)
     {
-        sqrllog << EthRed << "Failed to parse tune file! " << e.what();
+        sqrllog << EthRed << "Failed to parse tune file! ";
+        sqrllog << EthRed  << e.what();
     }
 }
 bool SQRLMiner::saveTune() {
