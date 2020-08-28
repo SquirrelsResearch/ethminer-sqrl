@@ -1240,7 +1240,7 @@ void SQRLMiner::getTelemetry(unsigned int *tempC, unsigned int *fanprct, unsigne
   int temp = _telemetry->miners.at(m_index).sensors.tempC;
 
   if (m_tuningStage > 0)//still tuning
-      s << EthRed << " Tuning... S" << (int)m_tuneHashCounter;
+      s << EthRed << " Tuning... S" << (int)m_tuningStage;
   
   //Average hashrate block
   sqrllog << EthTeal << "sqrl-" << m_index << EthLime 
