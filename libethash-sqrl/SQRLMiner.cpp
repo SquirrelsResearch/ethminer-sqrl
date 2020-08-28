@@ -345,6 +345,7 @@ bool SQRLMiner::saveTune() {
     ofs.open("tune.txt", std::ios_base::app);  // append instead of overwrite
     if (ofs.is_open())
     {
+        sqrllog << EthOrange << "Tune finished, saving tune.txt!";
         ofs << m_settingID << "," << m_bestSettingsSoFar.first.patience << ","
             << m_bestSettingsSoFar.first.intensityN << "," << m_bestSettingsSoFar.first.intensityD
             << endl;
@@ -1112,7 +1113,6 @@ void SQRLMiner::autoTune(uint64_t newTcks)
 
                                 m_intensitySettings = m_bestSettingsSoFar.first;
                                 m_intensityTuneFinished = true;
-                                m_hashCounter = 0;  // reset overall average counters
                                 for (int i = 0; i < 3; i++)
                                 {
                                     if (!saveTune())
