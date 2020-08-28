@@ -64,6 +64,8 @@ public:
 
 protected:
     bool initDevice() override;
+
+    
     bool initEpoch_internal() override;
     void kick_miner() override;
 
@@ -96,6 +98,9 @@ private:
     void clearSolutionStats();
     int findBestIntensitySoFar();
     float getHardwareErrorRate();
+    void readSavedTunes(string fileName, string settingID);
+    bool saveTune();
+    
 
     SolutionAccountType getSolutions();
     atomic<timePoint> m_lastTuneTime = {std::chrono::steady_clock::now()};
@@ -118,7 +123,7 @@ private:
     bool m_bestIntensityRangeFound = false;
     bool m_intensityTuneFinished = false;
     uint8_t m_tuningStage = 0;
-
+    string m_settingID = ""; // DNA_bitstream_V
 };
 
 

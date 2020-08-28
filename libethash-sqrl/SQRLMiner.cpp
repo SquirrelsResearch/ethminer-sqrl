@@ -222,6 +222,8 @@ bool SQRLMiner::initDevice()
       sqrllog << m_deviceDescriptor.name << " Connected";
       m_axi = axi;
 
+     
+
       // Critical Data
       uint32_t dnaLo,dnaMid,dnaHi;
       SQRLAXIRead(m_axi, &dnaLo, 0x1000);
@@ -230,6 +232,7 @@ bool SQRLMiner::initDevice()
       std::stringstream s;
       s << setfill('0') << setw(8) << std::hex << dnaLo << std::hex << dnaMid << std::hex << dnaHi;
       sqrllog << "DNA: " << s.str();
+      m_settingID += s.str() + "_";
 
       uint32_t device, bitstream;
       SQRLAXIRead(m_axi, &device, 0x0);
@@ -242,9 +245,15 @@ bool SQRLMiner::initDevice()
       s.clear();
       s << setfill('0') << setw(8) << std::hex << bitstream;
       sqrllog << "Bitstream: " << s.str();
+      m_settingID += s.str() + "_";
 
       InitVoltageTbl();
 
+      m_settingID += format2decimal(m_settings.fkVCCINT);
+      m_settingID += format2decimal(m_settings.jcVCCINT);
+
+     
+      
       // Set voltage if asked
       if (m_settings.fkVCCINT > 500)
       {
@@ -287,12 +296,20 @@ bool SQRLMiner::initDevice()
       } else {
         m_lastClk = getClock();
       }
+
+      sqrllog << "TuneID=" << m_settingID;
+      if (m_settings.tuneFile != "")
+          readSavedTunes(m_settings.tuneFile, m_settingID);
+      
+
       // Print the settings
       sqrllog << "WorkDelay: " << m_settings.workDelay;
       sqrllog << "Patience: " << m_settings.patience;
       sqrllog << "IntensityN: " << m_settings.intensityN;
       sqrllog << "IntensityD: " << m_settings.intensityD;
       sqrllog << "SkipStallDetect: " << m_settings.skipStallDetection;
+
+      
     } else {
       sqrllog << m_deviceDescriptor.name << " Failed to Connect";
       m_axi = NULL;
@@ -301,9 +318,46 @@ bool SQRLMiner::initDevice()
     DEV_BUILD_LOG_PROGRAMFLOW(sqrllog, "sq-" << m_index << " SQRLMiner::initDevice end");
     return (m_axi != 0);
 }
+void SQRLMiner::readSavedTunes(string fileName, string settingID)
+{
+    ifstream myfile(fileName);
+    std::string line;
+    while (std::getline(myfile, line))
+    {    
+        std::vector<std::string> words;
+        boost::split(words, line, boost::is_any_of(","), boost::token_compress_on);
+        if (words.size() > 0)
+        {
+            if (words[0] == settingID)
+            {
+                sqrllog << "Found a previous tune!";
+                m_lastClk = stoi(words[1]);
+                m_settings.patience = stoi(words[2]);
+                m_settings.intensityN = stoi(words[3]);
+                m_settings.intensityD = stoi(words[4]);
+            }
+        }
 
-
-/*
+    }
+}
+bool SQRLMiner::saveTune() {
+    std::ofstream ofs;
+    ofs.open("tune.txt", std::ios_base::app);  // append instead of overwrite
+    if (ofs.is_open())
+    {
+        ofs << m_settingID << "," << m_bestSettingsSoFar.first.patience << ","
+            << m_bestSettingsSoFar.first.intensityN << "," << m_bestSettingsSoFar.first.intensityD
+            << endl;
+        ofs.close();
+        return true;
+    }
+    else
+    {
+        sqrllog << EthRed << "Could not write tune file!";
+        return false;
+    }
+}
+    /*
  * A new epoch was receifed with last work package (called from Miner::initEpoch())
  *
  * If we get here it means epoch has changed so it's not necessary
@@ -796,8 +850,8 @@ void SQRLMiner::autoTune(uint64_t newTcks)
 {
     m_tuneHashCounter += newTcks;
 
-     if (std::find(m_settings.exclude.begin(), m_settings.exclude.end(), m_index) !=
-        m_settings.exclude.end())  // if FPGA is excluded from tuning - don't bother
+     if (std::find(m_settings.tuneExclude.begin(), m_settings.tuneExclude.end(), m_index) !=
+        m_settings.tuneExclude.end())  // if FPGA is excluded from tuning - don't bother
         return;
 
 
@@ -1058,6 +1112,15 @@ void SQRLMiner::autoTune(uint64_t newTcks)
 
                                 m_intensitySettings = m_bestSettingsSoFar.first;
                                 m_intensityTuneFinished = true;
+                                m_hashCounter = 0;  // reset overall average counters
+                                for (int i = 0; i < 3; i++)
+                                {
+                                    if (!saveTune())
+                                        Sleep(100);  // in case file busy, try couple times
+                                    else
+                                        break;
+                                }
+
                             }
                         }
                     }
@@ -1065,8 +1128,9 @@ void SQRLMiner::autoTune(uint64_t newTcks)
                             << (m_tuneHashCounter / stage3_averageSeconds) / pow(10, 6) << "MHs";
                     m_lastTuneTime = std::chrono::steady_clock::now();
                     clearSolutionStats();
-                    m_hashCounter = 0;  // reset overall average counters
+                    
                     m_tuningStage = 0;
+                    
                 }
             }
         }

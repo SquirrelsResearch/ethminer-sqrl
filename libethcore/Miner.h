@@ -139,7 +139,8 @@ struct SQSettings : public MinerSettings
    unsigned tuneTime = 60;
    unsigned tuneMaxClk = 600;
    bool showHBMStats = true;
-   vector<uint8_t> exclude;
+   vector<uint8_t> tuneExclude;
+   string tuneFile = "";
 };
 
 struct SolutionAccountType
