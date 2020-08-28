@@ -869,7 +869,7 @@ void SQRLMiner::autoTune(uint64_t newTcks)
                 else
                     sqrllog << EthOrange<< "S1: Clocking out of bounds, min frequency reached!";
             }
-
+            m_tuningStage = 1;
 
             m_lastTuneTime = std::chrono::steady_clock::now();
         }
@@ -901,15 +901,15 @@ void SQRLMiner::autoTune(uint64_t newTcks)
                     m_stableFreqFound = true;
                 }
             }
+            m_tuningStage = 2;
         }
     }
 
     if (m_settings.autoTune >= 3 && !m_intensityTuneFinished)   
     {       
-       
-
-            if (m_stableFreqFound)
+        if (m_stableFreqFound)
         {
+            m_tuningStage = 3;
             if (!m_intensityTuning)  // init
             {
                 float targetThroughput = _throughputTargets[m_firstPassIndex];
@@ -958,7 +958,7 @@ void SQRLMiner::autoTune(uint64_t newTcks)
                                                                                  // coarse pass
                         {
                             m_firstPassIndex++;
-
+                            
                             float targetThroughput = _throughputTargets[m_firstPassIndex];
                             m_intensitySettings.intensityN =
                                 (int)((m_intensitySettings.intensityD * targetThroughput) /
@@ -1013,6 +1013,7 @@ void SQRLMiner::autoTune(uint64_t newTcks)
 
                                 m_shareTimes.clear();  // clear for the second pass
                                 m_intensitySettings.intensityN = m_secondPassLowerN;
+                                
                             }
                         }
                         else  // second - fine pass of N
@@ -1065,6 +1066,7 @@ void SQRLMiner::autoTune(uint64_t newTcks)
                     m_lastTuneTime = std::chrono::steady_clock::now();
                     clearSolutionStats();
                     m_hashCounter = 0;  // reset overall average counters
+                    m_tuningStage = 0;
                 }
             }
         }
@@ -1236,7 +1238,11 @@ void SQRLMiner::getTelemetry(unsigned int *tempC, unsigned int *fanprct, unsigne
   }
   float voltage = _telemetry->miners.at(m_index).sensors.powerW; //TODO: Check if can get directly from tempc%powerW
   int temp = _telemetry->miners.at(m_index).sensors.tempC;
-  //Average hashrates
+
+  if (m_tuningStage > 0)//still tuning
+      s << EthRed << " Tuning... S" << (int)m_tuneHashCounter;
+  
+  //Average hashrate block
   sqrllog << EthTeal << "sqrl-" << m_index << EthLime 
           << " Avg 1m:" << format2decimal(m_avgValues[0])
           << " 10m:" << format2decimal(m_avgValues[1]) 
@@ -1245,6 +1251,7 @@ void SQRLMiner::getTelemetry(unsigned int *tempC, unsigned int *fanprct, unsigne
           << "% [" << m_intensitySettings.to_string() << "] "
           << EthWhite << m_lastClk << "MHz " << format2decimal(voltage)
           << "V " << temp << "C " << s.str();
+  
 
   if (leftCatastrophic | rightCatastrophic | !leftCalibrated | !rightCalibrated) {
     // Power down all cores

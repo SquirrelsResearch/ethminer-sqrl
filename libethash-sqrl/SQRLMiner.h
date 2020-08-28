@@ -117,7 +117,7 @@ private:
     pair<IntensitySettings, double> m_bestSettingsSoFar;
     bool m_bestIntensityRangeFound = false;
     bool m_intensityTuneFinished = false;
-
+    uint8_t m_tuningStage = 0;
 
 };
 
