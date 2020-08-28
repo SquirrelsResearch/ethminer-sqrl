@@ -364,6 +364,7 @@ public:
 	app.add_option("--sqrl-core-clk,--cclk", m_SQSettings.targetClk, "")->check(CLI::Range(50,600));
     app.add_option("--auto-tune", m_SQSettings.autoTune, " 0 - no auto-tune, 1 - just reach max stable freq, 2 - downclock till low errror rate, 3 - tune intensity, 4- downclock voltage",true)->check(CLI::Range(0, 4));
     app.add_option("--tune-time", m_SQSettings.tuneTime, " Tuning time per test in seconds",true)->check(CLI::Range(10, 10000000));
+    app.add_option("--tune-max-clk", m_SQSettings.tuneMaxClk, " Tuning will not got higher than this clk, Mhz",true)->check(CLI::Range(300, 600));
     app.add_option("--tune-exclude", m_SQSettings.exclude, "Devices to exclude, space seperated", true);
 	app.add_option("--sqrl-intensity-n,--sqin", m_SQSettings.intensityN,"Numerator of SQRL Intensity (0-255) - 0 disables rate control(Not Recommended)", true)->check(CLI::Range(0,255));
 	app.add_option("--sqrl-intensity-d,--sqid", m_SQSettings.intensityD,"Denominator of SQRL Intensity (1-32)", true)->check(CLI::Range(1,32));

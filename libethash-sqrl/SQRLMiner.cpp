@@ -838,7 +838,7 @@ void SQRLMiner::autoTune(uint64_t newTcks)
             {
                 if (!m_maxFreqReached)
                 {
-                    if (currentStepIndex != _freqSteps.size() - 1)  // not getting out of bounds
+                    if (currentStepIndex != _freqSteps.size() - 1 && _freqSteps[currentStepIndex] != m_settings.tuneMaxClk)  // not getting out of bounds
                     {
                         int nextClock =
                             _freqSteps[currentStepIndex + 1] + 1;  //+1 for precision issues
