@@ -1116,7 +1116,11 @@ void SQRLMiner::autoTune(uint64_t newTcks)
                                 for (int i = 0; i < 3; i++)
                                 {
                                     if (!saveTune())
-                                        Sleep(100);  // in case file busy, try couple times
+#ifdef _WIN32
+                                        Sleep(10);// in case file busy, try couple times
+#else
+                                        usleep(10000);
+#endif
                                     else
                                         break;
                                 }
