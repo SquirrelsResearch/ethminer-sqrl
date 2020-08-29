@@ -141,6 +141,7 @@ struct SQSettings : public MinerSettings
    bool forceDAG = false; 
    bool skipDAG = false; // DEV - 'fake' building dag to test hashrate only
    vector<uint8_t> exclude;
+   unsigned axiTimeoutMs = 250;
 };
 
 struct SolutionAccountType

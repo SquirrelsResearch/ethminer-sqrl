@@ -379,6 +379,8 @@ public:
 	app.add_flag("--sqrl-force-dag", m_SQSettings.forceDAG, "Force DAG to regenerate");
 	app.add_flag("--sqrl-skip-dag", m_SQSettings.skipDAG, "Bypass actual DAG generation (Results will be corrupt but hashrate accurate for tuning");
 
+	// AXI Timeout control
+	app.add_option("--sqrl-axi-timeout", m_SQSettings.axiTimeoutMs, "AXI maximum latency in milliseconds", true);
 #ifdef _WIN32
 	WSADATA wsaData;
         WSAStartup(MAKEWORD(2,2), &wsaData);

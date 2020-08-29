@@ -217,23 +217,45 @@ bool SQRLMiner::initDevice()
            << " Memory : " << dev::getFormattedMemory((double)m_deviceDescriptor.totalMemory);
     m_hwmoninfo.deviceType = HwMonitorInfoType::SQRL;
 
+    SQRLAXIResult err;
     SQRLAXIRef axi = SQRLAXICreate(SQRLAXIConnectionTCP, (char *)m_deviceDescriptor.sqHost.c_str(), m_deviceDescriptor.sqPort);
     if (axi != NULL) {
+      SQRLAXISetTimeout(axi, m_settings.axiTimeoutMs);
       sqrllog << m_deviceDescriptor.name << " Connected";
       m_axi = axi;
 
       // Critical Data
       uint32_t dnaLo,dnaMid,dnaHi;
-      SQRLAXIRead(m_axi, &dnaLo, 0x1000);
-      SQRLAXIRead(m_axi, &dnaMid, 0x1008);
-      SQRLAXIRead(m_axi, &dnaHi, 0x7000);
+      err = SQRLAXIRead(m_axi, &dnaLo, 0x1000);
+      if (err != 0) {
+        sqrllog << "Error reading dna";
+	dnaLo = 0;
+      } 
+      err = SQRLAXIRead(m_axi, &dnaMid, 0x1008);
+      if (err != 0) {
+        sqrllog << "Error reading dna";
+	dnaMid = 0;
+      } 
+      err = SQRLAXIRead(m_axi, &dnaHi, 0x7000);
+      if (err != 0) {
+        sqrllog << "Error reading dna";
+	dnaHi = 0;
+      } 
       std::stringstream s;
       s << setfill('0') << setw(8) << std::hex << dnaLo << std::hex << dnaMid << std::hex << dnaHi;
       sqrllog << "DNA: " << s.str();
 
       uint32_t device, bitstream;
-      SQRLAXIRead(m_axi, &device, 0x0);
-      SQRLAXIRead(m_axi, &bitstream, 0x8);
+      err = SQRLAXIRead(m_axi, &device, 0x0);
+      if (err != 0) {
+        sqrllog << "Error reading device type";
+	device = 'unkn';
+      } 
+      err = SQRLAXIRead(m_axi, &bitstream, 0x8);
+      if (err != 0) {
+        sqrllog << "Error reading bitstream version";
+	bitstream = 0;
+      } 
       s.str("");
       s.clear();
       s << (char)(device >> 24) << (char)((device >> 16)&0xff) << (char)((device >> 8)&0xff) << (char)((device >> 0)&0xff);
@@ -273,12 +295,8 @@ bool SQRLMiner::initDevice()
         SQRLAXIWrite(m_axi, 0x0A, 0xA108, false); // Transmit FIFO byte 2, VCCBRAM_OV_FAULT 
         SQRLAXIWrite(m_axi, 0xf3 , 0xA108, false); // Transmit FIFO byte 3 // vEnc[0]
         SQRLAXIWrite(m_axi, 0x200 | 0xe0, 0xA108, false); // Transmit FIFO byte 4 // vEnc[1] (With Stop)
-        SQRLAXIWrite(m_axi, 0x1, 0xA100, false); // Send IIC transaction
-#ifdef _WIN32
-	Sleep(1000);
-#else
+        SQRLAXIWrite(m_axi, 0x1, 0xA100, false); // Send IIC transaction 	
         usleep(1000000);
-#endif
         SQRLAXIWrite(m_axi, 0xA, 0xA040, false); // Soft Reset IIC 	
         SQRLAXIWrite(m_axi, 0x100|(0x4d<<1), 0xA108, false); // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia) 	
         SQRLAXIWrite(m_axi, 0xD0, 0xA108, false); // Transmit FIFO byte 2 (SingleShotPage+Cmd)
@@ -290,11 +308,8 @@ bool SQRLMiner::initDevice()
         SQRLAXIWrite(m_axi, 0x1, 0xA100, false); // Send IIC transaction 	
 
         sqrllog << "Asking JCM VRM, if present, to target " << m_settings.jcVCCINT << "mv";
-#ifdef _WIN32
-	Sleep(1000);
-#else
+
         usleep(1000000);
-#endif
         uint16_t vEnc = (uint16_t)(((double)m_settings.jcVCCINT/1000.0) * 256.0);
         SQRLAXIWrite(m_axi, 0xA, 0xA040, false); // Soft Reset IIC 	
         SQRLAXIWrite(m_axi, 0x100|(0x4d<<1), 0xA108, false); // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia) 	
@@ -376,6 +391,10 @@ bool SQRLMiner::initEpoch_internal()
     // Check for the existing DAG
     uint32_t dagStatusWord = 0;
     err = SQRLAXIRead(m_axi, &dagStatusWord, 0x40B8);
+    if (err != 0) {
+      sqrllog << "Failed checking current HW DAG version";
+      dagStatusWord = 0;
+    }
     if ((dagStatusWord >> 31) && !m_settings.forceDAG) {
       sqrllog << "Current HW DAG is for Epoch " << (dagStatusWord & 0xFFFF);
       if ( (dagStatusWord & 0xFFFF) == (uint32_t)m_epochContext.epochNumber) {
@@ -500,7 +519,10 @@ bool SQRLMiner::initEpoch_internal()
     auto startInit = std::chrono::steady_clock::now(); 
     SQRLAXIWrite(m_axi, 0x1, 0x4000, true);
     uint32_t status;
-    SQRLAXIRead(m_axi, &status, 0x4000);
+    err = SQRLAXIRead(m_axi, &status, 0x4000);
+    if (err != 0) {
+      sqrllog << "Error checking DAG status";
+    } 
     uint8_t cnt = 0;
     if (!m_settings.skipDAG) {
       while ((status&2) != 0x2) {
@@ -649,9 +671,15 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
     }
  
     // Esnure hashcore loads new, reset work
-    SQRLAXIWrite(m_axi, 0x00000000, 0x506c, false);
+    err = SQRLAXIWrite(m_axi, 0x00000000, 0x506c, false);
+    if (err != 0) {
+      sqrllog << "Error stopping hashcore";
+    }
     // Bit 0 = enable nonces via interrupt instead of polling
     SQRLAXIWrite(m_axi, 0x00010001, 0x506c, false);
+    if (err != 0) {
+      sqrllog << "Error starting hashcore";
+    }
 
     uint32_t lastSCnt = 0;
     uint64_t lastTChecks = 0;
@@ -684,7 +712,10 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
 	  uint32_t value = 0;
 	  uint32_t nonceLo,nonceHi;
 	  err = SQRLAXIRead(m_axi, &value, 0x506c);
-          if (err != 0) sqrllog << "Failed checking nonceFlags";
+          if (err != 0) {
+            sqrllog << "Failed checking nonceFlags";
+	    value = 0;
+	  }
     	  if ((value >> 15) & 0x1) {
             nonceValid[0] = true;
 	    SQRLAXIRead(m_axi, &nonceHi, 0x5000+19*4);
@@ -736,10 +767,22 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
 	uint32_t sCnt;
 	uint32_t tChkLo, tChkHi;
 	if (!m_settings.skipStallDetection) {
-          SQRLAXIRead(m_axi, &sCnt, 0x5084);
+          err = SQRLAXIRead(m_axi, &sCnt, 0x5084);
+	  if (err != 0) {
+            sqrllog << "Error checking for hashcore stall";
+	    sCnt = 0;
+	  } 
 	}
-	SQRLAXIRead(m_axi, &tChkLo, 0x5048);
-	SQRLAXIRead(m_axi, &tChkHi, 0x5044);
+	err = SQRLAXIRead(m_axi, &tChkLo, 0x5048);
+	if (err != 0) {
+          sqrllog << "Error reading target check counter";
+	  tChkLo = 0;
+	} 
+	err = SQRLAXIRead(m_axi, &tChkHi, 0x5044);
+        if (err != 0) {
+          sqrllog << "Error reading target check counter";
+	  tChkHi = 0;
+	} 
 	uint64_t tChks = ((uint64_t)tChkHi << 32) + tChkLo;
 
 	uint64_t newTChks = 0;
@@ -1157,7 +1200,11 @@ double SQRLMiner::getClock() {
 
 double SQRLMiner::setClock(double targetClk) {
   uint32_t valueVCO;
-  SQRLAXIRead(m_axi, &valueVCO, 0x8200);
+  SQRLAXIResult err = SQRLAXIRead(m_axi, &valueVCO, 0x8200);
+  if (err != 0) {
+    sqrllog << "Error checking current VCO - Aborting clock change";
+    return 0.0;
+  }
   // You can force VCO values here - be aware it also affects APB bus clock
   //valueVCO &= 0xFF0000FF;
   //valueVCO |= 0x007d0700;
@@ -1171,7 +1218,12 @@ double SQRLMiner::setClock(double targetClk) {
   vco /= gdiv;
 
   uint32_t valueClk0;
-  SQRLAXIRead(m_axi, &valueClk0, 0x8208);
+  err = SQRLAXIRead(m_axi, &valueClk0, 0x8208);
+  if (err != SQRLAXIResultOK) { 
+    sqrllog << "Error checking current clock - Aborting clock change";
+    return 0.0;
+  }
+
   double clk0div = (double)(valueClk0 & 0xF);
   double clk0FracDiv = ((double)((valueClk0 >> 8) & 0x3FF))/1000;
   clk0div += clk0FracDiv;
@@ -1183,10 +1235,22 @@ double SQRLMiner::setClock(double targetClk) {
   uint32_t daggenPwrState;
   if (targetClk != -1.0) {
     // Make sure we backup mining parameters - clock unlock can reset these
-    SQRLAXIRead(m_axi, &nItems, 0x5040);
+    err = SQRLAXIRead(m_axi, &nItems, 0x5040);
+    if (err != 0) {
+      sqrllog << "Fatal error preserving settings for clock change";
+      nItems = 0;
+    } 
     SQRLAXIRead(m_axi, &rnItems, 0x5088);
+    if (err != 0) {
+      sqrllog << "Fatal error preserving settings for clock change";
+      rnItems = 0;
+    } 
     // Ensure DAGGEN is powered on
     SQRLAXIRead(m_axi, &daggenPwrState, 0xB000);   
+    if (err != 0) {
+      sqrllog << "Fatal error preserving settings for clock change";
+      daggenPwrState = 0;
+    } 
     SQRLAXIWrite(m_axi, 0xFFFFFFFF, 0xB000, true);   
   }
   if (targetClk > 0) {
@@ -1226,6 +1290,9 @@ double SQRLMiner::setClock(double targetClk) {
       SQRLAXIRead(m_axi, &locked, 0x8004);
       if (locked&1) break;
     }
+    if (waitCnt == 0) {
+      sqrllog << "Timed out waiting for clock change to re-lock";
+    } 
 
     // Make sure we restore the mining parameters 
     SQRLAXIWrite(m_axi, nItems, 0x5040, true);
@@ -1244,14 +1311,22 @@ void SQRLMiner::getTelemetry(unsigned int *tempC, unsigned int *fanprct, unsigne
   // Read general SYSMON temp 
   axiMutex.lock();
   uint32_t raw;
-  SQRLAXIRead(m_axi, &raw, 0x3400);
-  (*tempC) = ((double)raw * 507.6 / 65536.0) - 279.43;
+  if (SQRLAXIResultOK == SQRLAXIRead(m_axi, &raw, 0x3400)) {
+    (*tempC) = ((double)raw * 507.6 / 65536.0) - 279.43;
+  } else {
+    (*tempC) = 0;
+  }
   (*fanprct) = getClock(); 
-  SQRLAXIRead(m_axi, &raw, 0x3404);
-  (*powerW) = ((double)raw * 3.0 / 65536.0) * 1000.0;
+  if (SQRLAXIResultOK == SQRLAXIRead(m_axi, &raw, 0x3404)) {
+    (*powerW) = ((double)raw * 3.0 / 65536.0) * 1000.0;
+  } else {
+    (*powerW) = 0;
+  }
 
   // Read the HBM stack control values
-  SQRLAXIRead(m_axi, &raw, 0x7008);
+  if(SQRLAXIResultOK != SQRLAXIRead(m_axi, &raw, 0x7008)) {
+    raw = 0;
+  }
   axiMutex.unlock();
   // Left CAL, Right CL, Left CAT, Left 7 bit, Right CAT (Meow), Right 7bit 
   bool leftCalibrated = ((raw >> 0) & 1)?true:false;
