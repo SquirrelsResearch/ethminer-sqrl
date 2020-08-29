@@ -63,6 +63,7 @@ public:
     double setClock(double targetClk);
     string getSettingsID() { return m_settingID; }
     uint8_t* getFPGAtemps() { return m_FPGAtemps; }
+    void setLastClock(double lastClk) { m_lastClk = lastClk; }
 
 protected:
     bool initDevice() override;
@@ -75,6 +76,8 @@ protected:
    
 
 private:
+    string m_settingID = "";  // DNA_bitstream_V
+
     atomic<bool> m_new_work = {false};
     atomic<bool> m_dagging = {false};
    
@@ -95,8 +98,6 @@ private:
     //Clock
     atomic<double> m_lastClk = {0};
 
-    
-
     //Averages
     double m_hashCounter = 0;
     double m_avgValues[4]; //1min avg hash, 10min avg hash, 60min avg hash, error rate
@@ -105,24 +106,8 @@ private:
     uint8_t m_FPGAtemps[3];//core,HBM-left,HBM-right;
    
     double average(std::vector<double> const& v);
-
-
-    
     atomic<std::chrono::steady_clock::time_point> m_avgHashTimer = {
         std::chrono::steady_clock::now()};
-  
-    
-
-    
-   
-    
-   
-   
-    
-   
- 
-    
-    string m_settingID = ""; // DNA_bitstream_V
 
 };
 

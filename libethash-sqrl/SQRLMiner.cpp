@@ -956,11 +956,8 @@ void SQRLMiner::getTelemetry(unsigned int *tempC, unsigned int *fanprct, unsigne
     	    << (int)rightTemp << "C";
   }
   
-  float voltage = (*powerW) / 1000.0;
-  //_telemetry->miners.at(m_index).sensors.powerW;  // TODO: Check if can get directly from
-                                                  // tempc%powerW
+  float voltage = (*powerW) / 1000.0; 
   int temp = (*tempC);
-  //_telemetry->miners.at(m_index).sensors.tempC;
 
   m_FPGAtemps[0] = temp;
   m_FPGAtemps[1] = leftTemp;

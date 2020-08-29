@@ -398,6 +398,7 @@ void AutoTuner::readSavedTunes(string fileName, string settingID)
                 {
                     sqrllog << "Found a previous tune!";
                     _lastClock = stoi(words[1]);
+                    _minerInstance->setLastClock(_lastClock);
                     _settings->patience = stoi(words[2]);
                     _settings->intensityN = stoi(words[3]);
                     _settings->intensityD = stoi(words[4]);
