@@ -189,8 +189,11 @@ uint8_t SQRLMiner::FindClosestVIDToVoltage(double ReqVoltage)
 	uint8_t idx = 0x80;
 		
 	// Normal idiot checks - including ensuring the requested voltage
-	// is both above the minimum, yet below the maximum...
-	if((ReqVoltage < SQRLMiner::VoltageTbl[0xFF]) || (ReqVoltage > SQRLMiner::VoltageTbl[0x00]))
+	// is both above the minimum, yet below the maximum - if not,
+	// clamp the voltage value to the possible range.
+	if(ReqVoltage <= SQRLMiner::VoltageTbl[0xFF])
+		return(0xFF);
+	else if(ReqVoltage >= SQRLMiner::VoltageTbl[0x00])
 		return(0x00);
 	
 	for(int half = 0x40; half > 0x00; half >>= 1)
@@ -272,7 +275,6 @@ bool SQRLMiner::initDevice()
       {
 		uint32_t tmv;
 		uint8_t tWiper = FindClosestVIDToVoltage(((double)m_settings.fkVCCINT / 1000.0));
-		if(!tWiper) tWiper = 0x44;
 		tmv = (uint32_t)(LookupVID(tWiper) * 1000.0);
 	 
 		sqrllog << "Found wiper code " << to_string(tWiper) << " for voltage " << to_string(tmv) << "mV.\n";
