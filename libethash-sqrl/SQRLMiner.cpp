@@ -895,7 +895,11 @@ void SQRLMiner::autoTune(uint64_t newTcks)
     auto elapsedSeconds = std::chrono::duration_cast<std::chrono::seconds>(
         std::chrono::steady_clock::now() - (timePoint)m_lastTuneTime).count();
 
-    if (elapsedSeconds % 10 == 0)//check every 10 sec
+    auto elapsedTempCheckSeconds = std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::steady_clock::now() - (timePoint)m_tuneTempCheckTimer)
+                                       .count();
+
+    if (elapsedTempCheckSeconds % 10 == 0)  // check every 10 sec
     {
         if (getClock() == 0)
         {
@@ -921,6 +925,8 @@ void SQRLMiner::autoTune(uint64_t newTcks)
             m_bestIntensityRangeFound = false;
             m_intensityTuneFinished = false;
         }
+
+        m_tuneTempCheckTimer = std::chrono::steady_clock::now();
     }
 
     bool tuningFinished = false;

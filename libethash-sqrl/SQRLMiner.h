@@ -111,6 +111,7 @@ private:
     SolutionAccountType getSolutions();
     atomic<timePoint> m_lastTuneTime = {std::chrono::steady_clock::now()};
     atomic<timePoint> m_avgHashTimer = {std::chrono::steady_clock::now()};
+    atomic<timePoint> m_tuneTempCheckTimer = {std::chrono::steady_clock::now()};
     atomic<bool> m_maxFreqReached = {false};
     atomic<bool> m_stableFreqFound = {false};
     std::vector<int> _freqSteps = {300, 309, 320, 331, 342, 355, 369, 384, 400, 417, 436, 457, 480, 505, 533, 564, 600};
@@ -130,6 +131,7 @@ private:
     bool m_intensityTuneFinished = false;
     uint8_t m_tuningStage = 0;
     string m_settingID = ""; // DNA_bitstream_V
+
 };
 
 
