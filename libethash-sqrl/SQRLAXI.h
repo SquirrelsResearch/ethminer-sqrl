@@ -67,6 +67,9 @@ SQRLAXIResult SQRLAXIWaitForInterrupt(SQRLAXIRef self, uint8_t interrupt, uint64
 // Causes any threads blocked on WaitForInterrupt to immediately kick with SQRLAXIResultTimedOut
 SQRLAXIResult SQRLAXIKickInterrupts(SQRLAXIRef self);
 
+// Parameters
+SQRLAXIResult SQRLAXISetTimeout(SQRLAXIRef self, uint32_t timeoutInMs);
+
 
 #ifdef __cplusplus
 }

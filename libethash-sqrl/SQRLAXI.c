@@ -99,6 +99,9 @@ typedef struct _SQRLAXI {
   sqrlcond_t wCond;
   sqrlmutex_t iMutex;
   sqrlcond_t iCond;
+
+  // Parameters
+  uint32_t axiTimeoutMs;
 } SQRLAXI;	
 
 // Static Helpers
@@ -329,7 +332,7 @@ SQRLAXIResult _SQRLAXIDoTransaction(SQRLAXIRef self, uint8_t * reqPkt, uint8_t *
 
   if (respPkt != NULL) {
     // Wait for a response!
-    uint32_t timeoutInMs = 100;
+    uint32_t timeoutInMs = self->axiTimeoutMs / 10;
     uint8_t timeoutCount = 10;
     for(;;) {
       SQRLMutexLock(&self->wMutex);
@@ -363,7 +366,7 @@ SQRLAXIResult _SQRLAXIDoTransaction(SQRLAXIRef self, uint8_t * reqPkt, uint8_t *
       }
       SQRLMutexUnlock(&self->wMutex);
       if (timeoutCount == 0) {
-        printf("AXI Timeout!\n");
+        printf("AXI Timeout Expired - Communications Error - %i ms\n", self->axiTimeoutMs);
 	SQRLMutexLock(&self->wMutex);
 	self->workPkts[pktSlot].respTimedOut = true;
 	self->workPkts[pktSlot].respRcvd = true;
@@ -402,6 +405,7 @@ SQRLAXIRef SQRLAXICreate(SQRLAXIConnectionType connection, char * hostOrFTDISeri
     self->wPktRd = 0;
     self->iPktWr = 0;
     self->iPktRd = 0;
+    self->axiTimeoutMs = 250000;
 
     if (self->type == SQRLAXIConnectionTCP) {
       // Lookup ddress
@@ -1003,6 +1007,11 @@ SQRLAXIResult SQRLAXIKickInterrupts(SQRLAXIRef self) {
   pthread_cond_broadcast(&self->iCond);
 #endif
   SQRLMutexUnlock(&self->iMutex);
+  return SQRLAXIResultOK;
+}
+
+SQRLAXIResult SQRLAXISetTimeout(SQRLAXIRef self, uint32_t timeoutInMs) {
+  self->axiTimeoutMs = timeoutInMs;
   return SQRLAXIResultOK;
 }
 
