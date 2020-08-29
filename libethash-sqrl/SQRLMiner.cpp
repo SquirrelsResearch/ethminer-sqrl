@@ -264,8 +264,37 @@ bool SQRLMiner::initDevice()
         SQRLAXIWrite(m_axi, 0x1, 0x9100, false); 	
       }
       if (m_settings.jcVCCINT > 500) {
-        sqrllog << "Asking JCM VRM, if present, to target " << m_settings.jcVCCINT << "mv";
+        sqrllog << "Applying JCM PMIC Hot Fix";
+        SQRLAXIWrite(m_axi, 0xA, 0xA040, false); // Soft Reset IIC 	
+        SQRLAXIWrite(m_axi, 0x100|(0x4d<<1), 0xA108, false); // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia) 	
+        SQRLAXIWrite(m_axi, 0xD0, 0xA108, false); // Transmit FIFO byte 2 (SingleShotPage+Cmd)
+        SQRLAXIWrite(m_axi, 0x04, 0xA108, false); // Transmit FIFO byte 3 (Write)
+        SQRLAXIWrite(m_axi, 0xAA, 0xA108, false); // Transmit FIFO byte 4 (AddrLo (CMD)	
+        SQRLAXIWrite(m_axi, 0x0A, 0xA108, false); // Transmit FIFO byte 2, VCCBRAM_OV_FAULT 
+        SQRLAXIWrite(m_axi, 0xf3 , 0xA108, false); // Transmit FIFO byte 3 // vEnc[0]
+        SQRLAXIWrite(m_axi, 0x200 | 0xe0, 0xA108, false); // Transmit FIFO byte 4 // vEnc[1] (With Stop)
+        SQRLAXIWrite(m_axi, 0x1, 0xA100, false); // Send IIC transaction
+#ifdef _WIN32
+	Sleep(1000);
+#else
+        usleep(1000000);
+#endif
+        SQRLAXIWrite(m_axi, 0xA, 0xA040, false); // Soft Reset IIC 	
+        SQRLAXIWrite(m_axi, 0x100|(0x4d<<1), 0xA108, false); // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia) 	
+        SQRLAXIWrite(m_axi, 0xD0, 0xA108, false); // Transmit FIFO byte 2 (SingleShotPage+Cmd)
+        SQRLAXIWrite(m_axi, 0x04, 0xA108, false); // Transmit FIFO byte 3 (Write)
+        SQRLAXIWrite(m_axi, 0xAA, 0xA108, false); // Transmit FIFO byte 4 (AddrLo (CMD)	
+        SQRLAXIWrite(m_axi, 0x06, 0xA108, false); // Transmit FIFO byte 2, VCCINT OV_FAULT 
+        SQRLAXIWrite(m_axi, 0xf3 , 0xA108, false); // Transmit FIFO byte 3 // vEnc[0]
+        SQRLAXIWrite(m_axi, 0x200 | 0xe0, 0xA108, false); // Transmit FIFO byte 4 // vEnc[1] (With Stop)
+        SQRLAXIWrite(m_axi, 0x1, 0xA100, false); // Send IIC transaction 	
 
+        sqrllog << "Asking JCM VRM, if present, to target " << m_settings.jcVCCINT << "mv";
+#ifdef _WIN32
+	Sleep(1000);
+#else
+        usleep(1000000);
+#endif
         uint16_t vEnc = (uint16_t)(((double)m_settings.jcVCCINT/1000.0) * 256.0);
         SQRLAXIWrite(m_axi, 0xA, 0xA040, false); // Soft Reset IIC 	
         SQRLAXIWrite(m_axi, 0x100|(0x4d<<1), 0xA108, false); // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia) 	
@@ -319,6 +348,9 @@ bool SQRLMiner::initEpoch_internal()
     // m_epochContext.lightCache
    
     m_dagging = true;   
+    // Always drop to stock clock immediately on start, before we stop or change cores
+    setClock(-2);
+
     axiMutex.lock();
     sqrllog << "Changing to Epoch " << m_epochContext.epochNumber; 
     // Stop the mining core if it is active, and stop DAGGEN if active
@@ -344,7 +376,7 @@ bool SQRLMiner::initEpoch_internal()
     // Check for the existing DAG
     uint32_t dagStatusWord = 0;
     err = SQRLAXIRead(m_axi, &dagStatusWord, 0x40B8);
-    if (dagStatusWord >> 31) {
+    if ((dagStatusWord >> 31) && !m_settings.forceDAG) {
       sqrllog << "Current HW DAG is for Epoch " << (dagStatusWord & 0xFFFF);
       if ( (dagStatusWord & 0xFFFF) == (uint32_t)m_epochContext.epochNumber) {
         sqrllog << "No DAG Generation is needed";
@@ -470,26 +502,30 @@ bool SQRLMiner::initEpoch_internal()
     uint32_t status;
     SQRLAXIRead(m_axi, &status, 0x4000);
     uint8_t cnt = 0;
-    while ((status&2) != 0x2) {
-      axiMutex.unlock();
+    if (!m_settings.skipDAG) {
+      while ((status&2) != 0x2) {
+        axiMutex.unlock();
 #ifdef _WIN32
-      Sleep(1000);
+        Sleep(1000);
 #else
-      usleep(1000000);
+        usleep(1000000);
 #endif
-      axiMutex.lock();
-      err = SQRLAXIRead(m_axi, &status, 0x4000);
-      if((err != 0) && m_settings.dieOnError) {
-        exit(1);
+        axiMutex.lock();
+        err = SQRLAXIRead(m_axi, &status, 0x4000);
+        if((err != 0) && m_settings.dieOnError) {
+          exit(1);
+        }
+        cnt++;
+        if (cnt % 5 == 0) {
+	  uint32_t dagProgress = 0;
+	  SQRLAXIRead(m_axi, &dagProgress, 0x4008);
+	  double progress = (double)(mixer_size+leftover);
+  	  progress = (double)dagProgress / progress;
+          sqrllog << EthPurple << "DAG " << std::fixed << std::setprecision(2) << (progress * 100.0) << "%" << EthReset; 
+        }
       }
-      cnt++;
-      if (cnt % 5 == 0) {
-	uint32_t dagProgress = 0;
-	SQRLAXIRead(m_axi, &dagProgress, 0x4008);
-	double progress = (double)(mixer_size+leftover);
-	progress = (double)dagProgress / progress;
-        sqrllog << EthPurple << "DAG " << std::fixed << std::setprecision(2) << (progress * 100.0) << "%" << EthReset; 
-      }
+    } else {
+      sqrllog << "DEV - Skipping DAG, expect failed hashes";
     }
     sqrllog << "Final DAG Generation Status: " << status;
     auto dagTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startInit);
@@ -1260,7 +1296,6 @@ void SQRLMiner::getTelemetry(unsigned int *tempC, unsigned int *fanprct, unsigne
     kick_miner();
   }
 } 
-
 
 /*
  * The main work loop of a Worker thread

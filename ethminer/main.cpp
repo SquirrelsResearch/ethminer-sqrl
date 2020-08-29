@@ -376,6 +376,9 @@ public:
 
 	app.add_option("--sqrl-dag-mixers", m_SQSettings.dagMixers, "Number of DAG mixers in the loaded bitstream (Rarely Used)", true)->check(CLI::Range(1,16));
 	app.add_option("--sqrl-hbm-stats", m_SQSettings.showHBMStats, "Show HBM Temperature/Calibration stats", true);
+	app.add_flag("--sqrl-force-dag", m_SQSettings.forceDAG, "Force DAG to regenerate");
+	app.add_flag("--sqrl-skip-dag", m_SQSettings.skipDAG, "Bypass actual DAG generation (Results will be corrupt but hashrate accurate for tuning");
+
 #ifdef _WIN32
 	WSADATA wsaData;
         WSAStartup(MAKEWORD(2,2), &wsaData);
