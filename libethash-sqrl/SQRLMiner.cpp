@@ -899,7 +899,7 @@ void SQRLMiner::autoTune(uint64_t newTcks)
         std::chrono::steady_clock::now() - (timePoint)m_tuneTempCheckTimer)
                                        .count();
 
-    if (elapsedTempCheckSeconds % 10 == 0)  // check every 10 sec
+    if (elapsedTempCheckSeconds > 10)  // check every 10 sec
     {
         if (getClock() == 0)
         {
@@ -1156,13 +1156,11 @@ bool SQRLMiner::tuneStage3(uint64_t elapsedSeconds)
                             }
                             // find best average to obtain the more fine tuning range
                             int bestAvgIndex = 0;
-                            double bestAvg = averages[bestAvgIndex];
                             for (int i = 1; i < averages.size(); i++)
                             {
                                 if (averages[i] > averages[bestAvgIndex])
                                 {
                                     bestAvgIndex = i;
-                                    bestAvg = averages[i];
                                 }
                                 sqrllog << EthOrange << "[" << i << "]avg=>" << averages[i];
                             }
