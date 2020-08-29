@@ -191,7 +191,7 @@ with patience 1
 bool AutoTuner::tuneStage3(uint64_t elapsedSeconds)
 {
     if (_intensityTuneFinished)  // nothing to do, finished...
-        return true;
+        return false;
 
     // Stage 3:
     int stage3_averageSeconds = _settings->tuneTime;
