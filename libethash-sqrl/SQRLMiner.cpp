@@ -884,8 +884,8 @@ void SQRLMiner::autoTune(uint64_t newTcks)
 
      m_tuneHashCounter += newTcks;
 
-     int maxCore = 50;
-     int maxHBM = 65;
+     int maxCore = m_settings.tuneMaxCoreTemp;
+     int maxHBM = m_settings.tuneMaxHBMtemp;
 
     float hash = RetrieveHashRate();
     float mhs = hash / pow(10, 6);
@@ -913,10 +913,25 @@ void SQRLMiner::autoTune(uint64_t newTcks)
 
         if (tempCore >= maxCore || tempLeft >= maxHBM || tempRight >= maxHBM)
         {
-            sqrllog << EthRed << "FPGA temps reaching max... Downclocking!";
-            int nextClock = _freqSteps[currentStepIndex - 1] + 1;  //+1 for precision issues
-            setClock(nextClock);
-            m_lastClk = nextClock - 1;
+            if (tempCore >= maxCore)
+                sqrllog << EthRed << "Core temperature reaching max set temp of "<<maxCore<<"C. Downclocking!";
+
+            if (tempLeft >= maxHBM || tempRight >= maxHBM)
+                sqrllog << EthRed << "HBM temperature reaching max set temp of " << maxHBM<< "C. Downclocking!";
+
+            if (currentStepIndex > 0)
+            {
+                int nextClock = _freqSteps[currentStepIndex - 1] + 1;  //+1 for precision issues
+                setClock(nextClock);
+                m_lastClk = nextClock - 1;
+            }
+            else
+            {
+                sqrllog << EthRed << "Cannot clock any lower! Tuning exiting...";
+                m_settings.autoTune = 0;
+                return;
+
+            }
 
             //Try and re-tune at lower clock and hope temps stay low
             m_maxFreqReached = true;
@@ -924,6 +939,8 @@ void SQRLMiner::autoTune(uint64_t newTcks)
             m_intensityTuning = false;
             m_bestIntensityRangeFound = false;
             m_intensityTuneFinished = false;
+            clearSolutionStats();
+            m_tuningStage = 0;
         }
 
         m_tuneTempCheckTimer = std::chrono::steady_clock::now();

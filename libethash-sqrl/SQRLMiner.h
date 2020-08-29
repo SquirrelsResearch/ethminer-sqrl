@@ -114,7 +114,7 @@ private:
     atomic<timePoint> m_tuneTempCheckTimer = {std::chrono::steady_clock::now()};
     atomic<bool> m_maxFreqReached = {false};
     atomic<bool> m_stableFreqFound = {false};
-    std::vector<int> _freqSteps = {300, 309, 320, 331, 342, 355, 369, 384, 400, 417, 436, 457, 480, 505, 533, 564, 600};
+    std::vector<int> _freqSteps = {100, 200, 246, 252, 259, 266, 274, 282, 290, 300, 309, 320, 331, 342, 355, 369, 384, 400, 417, 436, 457, 480, 505, 533, 564, 600};
 
     TelemetryType* _telemetry;
     IntensitySettings m_intensitySettings;

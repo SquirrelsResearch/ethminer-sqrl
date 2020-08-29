@@ -381,6 +381,8 @@ public:
     app.add_option("--tune-max-clk", m_SQSettings.tuneMaxClk, " Tuning will not got higher than this clk, Mhz",true)->check(CLI::Range(300, 600));
     app.add_option("--tune-exclude", m_SQSettings.tuneExclude, "Devices to exclude, space seperated", true);
     app.add_option("--tune-file", m_SQSettings.tuneFile, "File in the same directory containing tune files");
+    app.add_option("--tune-maxcore-temp", m_SQSettings.tuneMaxCoreTemp, "Max core temp, in C", true);
+    app.add_option("--tune-maxhbm-temp", m_SQSettings.tuneMaxHBMtemp, "Max HBM temp, in C", true);
 
 #ifdef _WIN32
 	WSADATA wsaData;
