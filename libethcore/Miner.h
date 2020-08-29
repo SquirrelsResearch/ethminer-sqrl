@@ -141,7 +141,7 @@ struct SQSettings : public MinerSettings
    bool showHBMStats = true;
    vector<uint8_t> tuneExclude;
    string tuneFile = "";
-   unsigned tuneMaxCoreTemp = 90;
+   unsigned tuneMaxCoreTemp = 85;
    unsigned tuneMaxHBMtemp = 80;
 };
 

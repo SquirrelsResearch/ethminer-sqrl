@@ -21,7 +21,7 @@ along with ethminer.  If not, see <http://www.gnu.org/licenses/>.
 #include <libethcore/EthashAux.h>
 #include <libethcore/Miner.h>
 #include "SQRLAXI.h"
-
+#include "AutoTuner.h"
 #include <functional>
 
 //#pragma optimize("", off)
@@ -32,23 +32,15 @@ namespace dev
 {
 namespace eth
 {
-struct IntensitySettings
+struct SQRLChannel : public LogChannel
 {
-    unsigned int patience;
-    unsigned int intensityN;
-    unsigned int intensityD;
-
-    IntensitySettings()
-    {
-        patience = 0;
-        intensityN = 0;
-        intensityD = 0;
-    }
-    string to_string()
-    {
-        return "P=" + std::to_string(patience) + " N=" + std::to_string(intensityN) + " D=" + std::to_string(intensityD);
-    }
+    static const char* name() { return EthOrange "sq"; }
+    static const int verbosity = 2;
 };
+#define sqrllog clog(SQRLChannel)
+
+class AutoTuner;
+
 class SQRLMiner : public Miner
 {
 
@@ -61,8 +53,16 @@ public:
 
     void search(const dev::eth::WorkPackage& w);
     void processHashrateAverages(uint64_t newTcks);
-    bool temperatureSafetyCheck(int currentStepIndex);
+
     void getTelemetry(unsigned int *tempC, unsigned int *fanprct, unsigned int *powerW) override;
+
+    SQSettings* getSQsettigns() { return &m_settings; }
+    unsigned getMinerIndex() { return m_index; }
+
+    double getClock();
+    double setClock(double targetClk);
+    string getSettingsID() { return m_settingID; }
+    uint8_t* getFPGAtemps() { return m_FPGAtemps; }
 
 protected:
     bool initDevice() override;
@@ -77,60 +77,51 @@ protected:
 private:
     atomic<bool> m_new_work = {false};
     atomic<bool> m_dagging = {false};
-    void workLoop() override;
+   
+    SQRLAXIRef m_axi = NULL;
+    std::mutex axiMutex;
     SQSettings m_settings;
+    AutoTuner* m_tuner;
+
+    void workLoop() override;
+  
+    //Voltages
 	double VoltageTbl[256] = { 0.0 };
+
 	void InitVoltageTbl(void);
 	uint8_t FindClosestVIDToVoltage(double ReqVoltage);
 	double LookupVID(uint8_t VID);
-    double getClock();
-    double setClock(double targetClk);
 
+    //Clock
     atomic<double> m_lastClk = {0};
-    SQRLAXIRef m_axi = NULL;
-    std::mutex axiMutex;
+
+    
+
+    //Averages
     double m_hashCounter = 0;
     double m_avgValues[4]; //1min avg hash, 10min avg hash, 60min avg hash, error rate
     vector<double> m_10minHashAvg;
     vector<double> m_60minHashAvg;
     uint8_t m_FPGAtemps[3];//core,HBM-left,HBM-right;
-
-    // auto tune
-    typedef std::chrono::steady_clock::time_point timePoint;
-    void autoTune(uint64_t newTcks);
-    void tuneStage1(uint64_t elapsedSeconds, int currentStepIndex, vector<int>::iterator it, float mhs);
-    bool tuneStage2(uint64_t elapsedSeconds, int currentStepIndex);
-    bool tuneStage3(uint64_t elapsedSeconds);
+   
     double average(std::vector<double> const& v);
-    void clearSolutionStats();
-    int findBestIntensitySoFar();
-    float getHardwareErrorRate();
-    void readSavedTunes(string fileName, string settingID);
-    bool saveTune();
+
+
+    
+    atomic<std::chrono::steady_clock::time_point> m_avgHashTimer = {
+        std::chrono::steady_clock::now()};
+  
     
 
-    SolutionAccountType getSolutions();
-    atomic<timePoint> m_lastTuneTime = {std::chrono::steady_clock::now()};
-    atomic<timePoint> m_avgHashTimer = {std::chrono::steady_clock::now()};
-    atomic<timePoint> m_tuneTempCheckTimer = {std::chrono::steady_clock::now()};
-    atomic<bool> m_maxFreqReached = {false};
-    atomic<bool> m_stableFreqFound = {false};
-    std::vector<int> _freqSteps = {100, 200, 246, 252, 259, 266, 274, 282, 290, 300, 309, 320, 331, 342, 355, 369, 384, 400, 417, 436, 457, 480, 505, 533, 564, 600};
-
-    TelemetryType* _telemetry;
-    IntensitySettings m_intensitySettings;
-    atomic<bool> m_intensityTuning = {false};
-    vector<pair<IntensitySettings, double>> m_shareTimes; // how many target checks in set time
-    std::vector<float> _throughputTargets = {0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.92};
-    uint8_t m_firstPassIndex = 0;
-    uint8_t m_secondPassLowerN = 0;
-    uint8_t m_secondPassUpperN = 0;
-    double m_tuneHashCounter = {0};
-    uint8_t m_secondPassStepSizeN = 0;
-    pair<IntensitySettings, double> m_bestSettingsSoFar;
-    bool m_bestIntensityRangeFound = false;
-    bool m_intensityTuneFinished = false;
-    uint8_t m_tuningStage = 0;
+    
+   
+    
+   
+   
+    
+   
+ 
+    
     string m_settingID = ""; // DNA_bitstream_V
 
 };
