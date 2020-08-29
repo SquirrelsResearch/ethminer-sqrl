@@ -347,6 +347,11 @@ void SQRLMiner::setVoltage(unsigned fkVCCINT, unsigned jcVCCINT)
 }
 void SQRLMiner::readSavedTunes(string fileName, string settingID)
 {
+    // if FPGA is excluded from tuning - don't bother
+    if (std::find(m_settings.tuneExclude.begin(), m_settings.tuneExclude.end(), m_index) !=
+        m_settings.tuneExclude.end())
+        return;
+
     try
     {
         ifstream myfile(fileName);
@@ -951,8 +956,6 @@ void SQRLMiner::autoTune(uint64_t newTcks)
     float mhs = hash / pow(10, 6);
     auto elapsedSeconds = std::chrono::duration_cast<std::chrono::seconds>(
         std::chrono::steady_clock::now() - (timePoint)m_lastTuneTime).count();
-
-
 
     bool tuningFinished = false;
    
