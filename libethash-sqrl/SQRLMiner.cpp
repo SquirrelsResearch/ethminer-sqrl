@@ -253,39 +253,8 @@ bool SQRLMiner::initDevice()
       m_settingID += format2decimal(m_settings.jcVCCINT);
 
      
-      
-      // Set voltage if asked
-      if (m_settings.fkVCCINT > 500)
-      {
-		uint32_t tmv;
-		uint8_t tWiper = FindClosestVIDToVoltage(((double)m_settings.fkVCCINT / 1000.0));
-		if(!tWiper) tWiper = 0x44;
-		tmv = (uint32_t)(LookupVID(tWiper) * 1000.0);
-	 
-		sqrllog << "Found wiper code " << to_string(tWiper) << " for voltage " << to_string(tmv) << "mV.\n";
-	    
-        sqrllog << "Instructing FK VRM, if present, to target " << m_settings.fkVCCINT << "mv";
-        sqrllog << "Closest Viable Voltage " << tmv << "mv";
-        SQRLAXIWrite(m_axi, 0xA, 0x9040, false); 	
-        SQRLAXIWrite(m_axi, 0x158, 0x9108, false); 	
-        SQRLAXIWrite(m_axi, 0x00, 0x9108, false); 	
-        SQRLAXIWrite(m_axi, 0x200 | tWiper, 0x9108, false); 	
-        SQRLAXIWrite(m_axi, 0x1, 0x9100, false); 	
-      }
-      if (m_settings.jcVCCINT > 500) {
-        sqrllog << "Asking JCM VRM, if present, to target " << m_settings.jcVCCINT << "mv";
-
-        uint16_t vEnc = (uint16_t)(((double)m_settings.jcVCCINT/1000.0) * 256.0);
-        SQRLAXIWrite(m_axi, 0xA, 0xA040, false); // Soft Reset IIC 	
-        SQRLAXIWrite(m_axi, 0x100|(0x4d<<1), 0xA108, false); // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia) 	
-        SQRLAXIWrite(m_axi, 0xD0, 0xA108, false); // Transmit FIFO byte 2 (SingleShotPage+Cmd)
-        SQRLAXIWrite(m_axi, 0x04, 0xA108, false); // Transmit FIFO byte 3 (Write)
-        SQRLAXIWrite(m_axi, (0x21 << 1), 0xA108, false); // Transmit FIFO byte 4 (AddrLo (CMD)	
-        SQRLAXIWrite(m_axi, 0x06, 0xA108, false); // Transmit FIFO byte 2, VOUT CMD 
-        SQRLAXIWrite(m_axi, 0x0 | (vEnc & 0xFF), 0xA108, false); // Transmit FIFO byte 3 // vEnc[0]
-        SQRLAXIWrite(m_axi, 0x200 | ((vEnc >> 8) & 0xFF), 0xA108, false); // Transmit FIFO byte 4 // vEnc[1] (With Stop)
-        SQRLAXIWrite(m_axi, 0x1, 0xA100, false); // Send IIC transaction 	
-      }
+      setVoltage(m_settings.fkVCCINT, m_settings.jcVCCINT);
+     
 
       // Initialize clk
       sqrllog << "Stock Clock: " << setClock(-2);
@@ -302,6 +271,7 @@ bool SQRLMiner::initDevice()
           readSavedTunes(m_settings.tuneFile, m_settingID);
       
 
+
       // Print the settings
       sqrllog << "WorkDelay: " << m_settings.workDelay;
       sqrllog << "Patience: " << m_settings.patience;
@@ -317,6 +287,63 @@ bool SQRLMiner::initDevice()
 
     DEV_BUILD_LOG_PROGRAMFLOW(sqrllog, "sq-" << m_index << " SQRLMiner::initDevice end");
     return (m_axi != 0);
+}
+void SQRLMiner::setVoltage(unsigned fkVCCINT, unsigned jcVCCINT)
+{
+    unsigned upperVoltLimit = 920;
+    unsigned lowerVoltLimit = 500;
+
+    if (fkVCCINT != 0)
+    {
+        if (fkVCCINT <= lowerVoltLimit || fkVCCINT > upperVoltLimit)
+            sqrllog << EthRed << "Asking to set fkVCCINT out of bounds! [" << lowerVoltLimit << "-" << upperVoltLimit << "]";
+                 
+        else  // Set voltage if asked
+        {
+            uint32_t tmv;
+            uint8_t tWiper = FindClosestVIDToVoltage(((double)fkVCCINT / 1000.0));
+            if (!tWiper)
+                tWiper = 0x44;
+            tmv = (uint32_t)(LookupVID(tWiper) * 1000.0);
+
+            sqrllog << "Found wiper code " << to_string(tWiper) << " for voltage " << to_string(tmv)
+                    << "mV.\n";
+
+            sqrllog << "Instructing FK VRM, if present, to target " << fkVCCINT << "mv";
+            sqrllog << "Closest Viable Voltage " << tmv << "mv";
+            SQRLAXIWrite(m_axi, 0xA, 0x9040, false);
+            SQRLAXIWrite(m_axi, 0x158, 0x9108, false);
+            SQRLAXIWrite(m_axi, 0x00, 0x9108, false);
+            SQRLAXIWrite(m_axi, 0x200 | tWiper, 0x9108, false);
+            SQRLAXIWrite(m_axi, 0x1, 0x9100, false);
+        }
+    }
+    if (jcVCCINT != 0)
+    {
+        if (jcVCCINT <= lowerVoltLimit || jcVCCINT > upperVoltLimit)
+            sqrllog << EthRed << "Asking to set jcVCCINT out of bounds! [" << lowerVoltLimit << "-" << upperVoltLimit << "]";
+                    
+        else// Set voltage if asked
+        {
+            sqrllog << "Asking JCM VRM, if present, to target " << jcVCCINT << "mv";
+
+            uint16_t vEnc = (uint16_t)(((double)jcVCCINT / 1000.0) * 256.0);
+            SQRLAXIWrite(m_axi, 0xA, 0xA040, false);                  // Soft Reset IIC
+            SQRLAXIWrite(m_axi, 0x100 | (0x4d << 1), 0xA108, false);  // Transmit FIFO byte 1
+                                                                      // (Write(startbit), Addr,
+                                                                      // Acadia)
+            SQRLAXIWrite(m_axi, 0xD0, 0xA108, false);  // Transmit FIFO byte 2 (SingleShotPage+Cmd)
+            SQRLAXIWrite(m_axi, 0x04, 0xA108, false);  // Transmit FIFO byte 3 (Write)
+            SQRLAXIWrite(m_axi, (0x21 << 1), 0xA108, false);  // Transmit FIFO byte 4 (AddrLo (CMD)
+            SQRLAXIWrite(m_axi, 0x06, 0xA108, false);         // Transmit FIFO byte 2, VOUT CMD
+            SQRLAXIWrite(m_axi, 0x0 | (vEnc & 0xFF), 0xA108, false);  // Transmit FIFO byte 3 //
+                                                                      // vEnc[0]
+            SQRLAXIWrite(
+                m_axi, 0x200 | ((vEnc >> 8) & 0xFF), 0xA108, false);  // Transmit FIFO byte 4
+                                                                      // // vEnc[1] (With Stop)
+            SQRLAXIWrite(m_axi, 0x1, 0xA100, false);                  // Send IIC transaction
+        }
+    }
 }
 void SQRLMiner::readSavedTunes(string fileName, string settingID)
 {
@@ -848,33 +875,17 @@ void SQRLMiner::processHashrateAverages(uint64_t newTcks) {
         }
     
 }
-    /*
-1. Move frequency up until 0 target checks or invalids, then back off one tick (inc 0.125 on divider)
-2. Start with ~60%, increase intensity or binary search until you find the local maxima. Do this with patience 1
-3. Set patience up by 1, search +/- 2/3 inn values for a new local maxima
-4. Repeat until patience makes it worse
-*/
+
 void SQRLMiner::autoTune(uint64_t newTcks)
 {
-    m_tuneHashCounter += newTcks;
-
      if (std::find(m_settings.tuneExclude.begin(), m_settings.tuneExclude.end(), m_index) !=
         m_settings.tuneExclude.end())  // if FPGA is excluded from tuning - don't bother
         return;
 
+     m_tuneHashCounter += newTcks;
 
-    //Stage 1:
-    int stage1_averageSeconds = 60;
-    float stabilityThreshold = 20;  // mhs
-    
-    //Stage 2:
-    float errorRateThreshold = 0.03;  // 3%
-    int tuningShareCount = m_settings.tuneTime;  // how many low shares to check to derive average from
-
-    //Stage 3:
-    int stage3_averageSeconds = m_settings.tuneTime;
-    
-    
+     int maxCore = 50;
+     int maxHBM = 65;
 
     float hash = RetrieveHashRate();
     float mhs = hash / pow(10, 6);
@@ -884,219 +895,292 @@ void SQRLMiner::autoTune(uint64_t newTcks)
     auto elapsedSeconds = std::chrono::duration_cast<std::chrono::seconds>(
         std::chrono::steady_clock::now() - (timePoint)m_lastTuneTime).count();
 
-   
-    if (m_settings.autoTune >= 1 && !m_stableFreqFound)  // Stage 1: Do a quick tune to get max frequency
+    if (elapsedSeconds % 10 == 0)//check every 10 sec
     {
-        if (elapsedSeconds > stage1_averageSeconds)
+        if (getClock() == 0)
         {
-            if (it == _freqSteps.end())
-            {
-                sqrllog << EthOrange << "S1: Could not find starting index, stopping...";
-                return;
-            }
+            sqrllog << EthRed << "FPGA appears to have crashed! Tuning exiting...";
+            m_settings.autoTune = 0;
+            return;
+        }
+        int tempCore = m_FPGAtemps[0];
+        int tempLeft = m_FPGAtemps[1];
+        int tempRight = m_FPGAtemps[2];
 
-            if (mhs > stabilityThreshold)  // assume above threshold mhs -> stable, can try higher
-                                           // clock
+        if (tempCore >= maxCore || tempLeft >= maxHBM || tempRight >= maxHBM)
+        {
+            sqrllog << EthRed << "FPGA temps reaching max... Downclocking!";
+            int nextClock = _freqSteps[currentStepIndex - 1] + 1;  //+1 for precision issues
+            setClock(nextClock);
+            m_lastClk = nextClock - 1;
+
+            //Try and re-tune at lower clock and hope temps stay low
+            m_maxFreqReached = true;
+            m_stableFreqFound = false;
+            m_intensityTuning = false;
+            m_bestIntensityRangeFound = false;
+            m_intensityTuneFinished = false;
+        }
+    }
+
+    bool tuningFinished = false;
+   
+    if (m_settings.autoTune >= 1)  // Stage 1: Do a quick tune to get max frequency
+        tuneStage1(elapsedSeconds, currentStepIndex, it, mhs);
+
+    if (m_settings.autoTune >= 2)  // Stage 2: Check for long term stability and error rate (removes marginally stable)
+    {
+        if (tuneStage2(elapsedSeconds, currentStepIndex))
+            if (m_settings.autoTune == 2)
+                tuningFinished = true;
+    }
+
+    if (m_settings.autoTune >= 3) //Stage 3: Tune N and P for given D.     
+    {
+        if (tuneStage3(elapsedSeconds))
+            if (m_settings.autoTune == 3)
+                tuningFinished = true;
+    }
+
+
+
+    if (tuningFinished)  // save the tune for re-use
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            if (!saveTune())
+#ifdef _WIN32
+                Sleep(10);  // in case file busy, try couple times
+#else
+                usleep(10000);
+#endif
+            else
+                break;
+        }
+        m_tuningStage = 0;
+    }
+       
+}
+void SQRLMiner::tuneStage1(uint64_t elapsedSeconds, int currentStepIndex, vector<int>::iterator it, float mhs) {
+
+    if (m_stableFreqFound) //nothing to do...
+        return;
+
+    // Stage 1:
+    int stage1_averageSeconds = 60;
+    float stabilityThreshold = 20;  // mhs
+
+    if (elapsedSeconds > stage1_averageSeconds)
+    {
+        if (it == _freqSteps.end())
+        {
+            sqrllog << EthOrange << "S1: Could not find starting index, stopping...";
+            return;
+        }
+
+        if (mhs > stabilityThreshold)  // assume above threshold mhs -> stable, can try higher clock
+        {
+            if (!m_maxFreqReached)
             {
-                if (!m_maxFreqReached)
+                if (currentStepIndex != _freqSteps.size() - 1 &&
+                    _freqSteps[currentStepIndex] != m_settings.tuneMaxClk)  // not getting out of
+                                                                            // bounds
                 {
-                    if (currentStepIndex != _freqSteps.size() - 1 && _freqSteps[currentStepIndex] != m_settings.tuneMaxClk)  // not getting out of bounds
-                    {
-                        int nextClock =
-                            _freqSteps[currentStepIndex + 1] + 1;  //+1 for precision issues
-                        sqrllog << EthOrange<< "S1: Stable at " << m_lastClk << "MHz, trying " << nextClock - 1 << "...";
-                        setClock(nextClock);
-                        m_lastClk = nextClock - 1;
-                    }
-                    else
-                    {
-                        sqrllog << EthOrange<< "Clocking out of bounds, max frequency reached!";
-                        m_maxFreqReached = true;
-                    }
-                }
-            }
-            else  // Unstable, downclock...
-            {
-                m_maxFreqReached = true;
-                if (currentStepIndex > 0)
-                {
-                    int nextClock = _freqSteps[currentStepIndex - 1] + 1;  //+1 for precision issues
-                    sqrllog << EthOrange <<"S1: Unstable at " << m_lastClk << "MHz, downclocking to "
+                    int nextClock = _freqSteps[currentStepIndex + 1] + 1;  //+1 for precision issues
+                    sqrllog << EthOrange << "S1: Stable at " << m_lastClk << "MHz, trying "
                             << nextClock - 1 << "...";
                     setClock(nextClock);
                     m_lastClk = nextClock - 1;
-
-                    clearSolutionStats();
-                }
-                else
-                    sqrllog << EthOrange<< "S1: Clocking out of bounds, min frequency reached!";
-            }
-            m_tuningStage = 1;
-
-            m_lastTuneTime = std::chrono::steady_clock::now();
-        }
-    }
-    if (m_settings.autoTune >= 2)// Stage 2: Check for long term stability and error rate (removes marginally stable)
-    {
-        
-        if (m_maxFreqReached && !m_stableFreqFound)
-        {
-            // calculate error rate
-            SolutionAccountType solutions = getSolutions();
-
-            if (solutions.low > 0 && (solutions.low+solutions.failed) % tuningShareCount == 0)
-            {
-                float errorRate = getHardwareErrorRate();
-
-                if (errorRate > errorRateThreshold)
-                {
-                    sqrllog << EthOrange<< "S2: Error rate of " << errorRate * 100 << "% above threshold (" << errorRateThreshold * 100 << "%), downclocking...";
-                    int nextClock = _freqSteps[currentStepIndex - 1] + 1;  //+1 for precision issues
-                    setClock(nextClock);
-                    m_lastClk = nextClock - 1;
-
-                    clearSolutionStats();
                 }
                 else
                 {
-                    sqrllog << EthOrange<< "S2: Stable long term frequency found at " << m_lastClk << "MHz";
-                    m_stableFreqFound = true;
+                    sqrllog << EthOrange << "Clocking out of bounds, max frequency reached!";
+                    m_maxFreqReached = true;
                 }
             }
-            m_tuningStage = 2;
         }
-    }
-
-    if (m_settings.autoTune >= 3 && !m_intensityTuneFinished)   
-    {       
-        if (m_stableFreqFound)
+        else  // Unstable, downclock...
         {
-            m_tuningStage = 3;
-            if (!m_intensityTuning)  // init
+            m_maxFreqReached = true;
+            if (currentStepIndex > 0)
             {
-                float targetThroughput = _throughputTargets[m_firstPassIndex];
-                m_intensitySettings.patience = m_settings.patience;  // start with user defined
-                m_intensitySettings.intensityD = 8;
-                m_intensitySettings.intensityN =
-                    (int)((m_intensitySettings.intensityD * targetThroughput) /
-                          (-targetThroughput + 1));  // derive inital N from 60% throughput.
+                int nextClock = _freqSteps[currentStepIndex - 1] + 1;  //+1 for precision issues
+                sqrllog << EthOrange << "S1: Unstable at " << m_lastClk << "MHz, downclocking to "
+                        << nextClock - 1 << "...";
+                setClock(nextClock);
+                m_lastClk = nextClock - 1;
 
                 clearSolutionStats();
-                m_intensityTuning = true;
-                sqrllog << EthOrange << "S3: Intensity tuning started... init settings ->"
-                        << m_intensitySettings.to_string();
+            }
+            else
+                sqrllog << EthOrange << "S1: Clocking out of bounds, min frequency reached!";
+        }
+        m_tuningStage = 1;
 
-                m_lastTuneTime = std::chrono::steady_clock::now();
+        m_lastTuneTime = std::chrono::steady_clock::now();
+    }
+}
+bool SQRLMiner::tuneStage2(uint64_t elapsedSeconds, int currentStepIndex)
+{
+    // Stage 2:
+    float errorRateThreshold = 0.03;  // 3%
+    int tuningShareCount = m_settings.tuneTime;  // how many low shares to check to derive average from
+
+    if (m_maxFreqReached && !m_stableFreqFound)
+    {
+        // calculate error rate
+        SolutionAccountType solutions = getSolutions();
+
+        if (solutions.low > 0 && (solutions.low + solutions.failed) % tuningShareCount == 0)
+        {
+            float errorRate = getHardwareErrorRate();
+
+            if (errorRate > errorRateThreshold)
+            {
+                sqrllog << EthOrange << "S2: Error rate of " << errorRate * 100
+                        << "% above threshold (" << errorRateThreshold * 100
+                        << "%), downclocking...";
+                int nextClock = _freqSteps[currentStepIndex - 1] + 1;  //+1 for precision issues
+                setClock(nextClock);
+                m_lastClk = nextClock - 1;
+
+                clearSolutionStats();
             }
             else
             {
-                if (elapsedSeconds > stage3_averageSeconds)
+                sqrllog << EthOrange << "S2: Stable long term frequency found at " << m_lastClk
+                        << "MHz";
+                m_stableFreqFound = true;
+                return true;
+            }
+        }
+        m_tuningStage = 2;
+    }
+    return false;
+}
+/*
+1. Move frequency up until 0 target checks or invalids, then back off one tick (inc 0.125 on
+divider)
+2. Start with ~60%, increase intensity or binary search until you find the local maxima. Do this
+with patience 1
+3. Set patience up by 1, search +/- 2/3 inn values for a new local maxima
+4. Repeat until patience makes it worse
+*/
+bool SQRLMiner::tuneStage3(uint64_t elapsedSeconds)
+{
+    if (m_intensityTuneFinished) //nothing to do, finished...
+        return true;
+
+     // Stage 3:
+    int stage3_averageSeconds = m_settings.tuneTime;
+
+    if (m_stableFreqFound)
+    {
+        m_tuningStage = 3;
+        if (!m_intensityTuning)  // init
+        {
+            float targetThroughput = _throughputTargets[m_firstPassIndex];
+            m_intensitySettings.patience = m_settings.patience;  // start with user defined
+            m_intensitySettings.intensityD = 8;
+            m_intensitySettings.intensityN =
+                (int)((m_intensitySettings.intensityD * targetThroughput) /
+                      (-targetThroughput + 1));  // derive inital N from 60% throughput.
+
+            clearSolutionStats();
+            m_intensityTuning = true;
+            sqrllog << EthOrange << "S3: Intensity tuning started... init settings ->"
+                    << m_intensitySettings.to_string();
+
+            m_lastTuneTime = std::chrono::steady_clock::now();
+        }
+        else
+        {
+            if (elapsedSeconds > stage3_averageSeconds)
+            {
+                float errorRate = getHardwareErrorRate();
+
+                float throughput =
+                    (float)m_intensitySettings.intensityN /
+                    (m_intensitySettings.intensityN + m_intensitySettings.intensityD);
+
+                pair<IntensitySettings, double> p;
+
+                double adjustedHash = (m_tuneHashCounter / stage3_averageSeconds) * (1 - errorRate);
+                p = std::make_pair(m_intensitySettings, adjustedHash);  // penalize for
+                                                                        // producing errors
+
+                if (m_bestSettingsSoFar.second < adjustedHash)
+                    m_bestSettingsSoFar = p;
+
+                m_shareTimes.push_back(p);
+                sqrllog << EthOrange << "S3: [" << m_intensitySettings.to_string()
+                        << "] errorRate=" << errorRate * 100 << "% Hashrate=" << adjustedHash
+                        << " throughput=" << throughput * 100 << "%";
+
+
+                if (!m_bestIntensityRangeFound)  // Stage 3.1: Tune intensity, find best range
                 {
-                    float errorRate = getHardwareErrorRate();
-
-                    float throughput =
-                        (float)m_intensitySettings.intensityN /
-                        (m_intensitySettings.intensityN + m_intensitySettings.intensityD);
-
-                    pair<IntensitySettings, double> p;
-
-                    double adjustedHash =
-                        (m_tuneHashCounter / stage3_averageSeconds) * (1 - errorRate);
-                    p = std::make_pair(m_intensitySettings, adjustedHash);  // penalize for
-                                                                            // producing errors
-
-                    if (m_bestSettingsSoFar.second < adjustedHash)
-                        m_bestSettingsSoFar = p;
-
-                    m_shareTimes.push_back(p);
-                    sqrllog << EthOrange << "S3: [" << m_intensitySettings.to_string()
-                            << "] errorRate=" << errorRate * 100 << "% Hashrate=" << adjustedHash
-                            << " throughput=" << throughput * 100 << "%";
-
-
-                    if (!m_bestIntensityRangeFound)  // Stage 3.1: Tune intensity, find best range
+                    if (m_secondPassLowerN == 0 && m_secondPassUpperN == 0)  // still first
+                                                                             // coarse pass
                     {
-                        if (m_secondPassLowerN == 0 && m_secondPassUpperN == 0)  // still first
-                                                                                 // coarse pass
+                        m_firstPassIndex++;
+
+                        float targetThroughput = _throughputTargets[m_firstPassIndex];
+                        m_intensitySettings.intensityN =
+                            (int)((m_intensitySettings.intensityD * targetThroughput) /
+                                  (-targetThroughput + 1));
+
+                        if (m_firstPassIndex == _throughputTargets.size() - 1)
                         {
-                            m_firstPassIndex++;
-                            
-                            float targetThroughput = _throughputTargets[m_firstPassIndex];
-                            m_intensitySettings.intensityN =
-                                (int)((m_intensitySettings.intensityD * targetThroughput) /
-                                      (-targetThroughput + 1));
+                            int bestIndex = findBestIntensitySoFar();
+                            sqrllog << EthOrange << "S3.0: First tuning pass complete, best ->"
+                                    << m_shareTimes[bestIndex].first.to_string() << " with "
+                                    << m_shareTimes[bestIndex].second / stage3_averageSeconds
+                                    << "hs";
 
-                            if (m_firstPassIndex == _throughputTargets.size() - 1)
+                            vector<double> averages(m_shareTimes.size() - 1);
+                            for (int i = 0; i < m_shareTimes.size() - 1; i++)
                             {
-                                int bestIndex = findBestIntensitySoFar();
-                                sqrllog << EthOrange << "S3.0: First tuning pass complete, best ->"
-                                        << m_shareTimes[bestIndex].first.to_string() << " with "
-                                        << m_shareTimes[bestIndex].second / stage3_averageSeconds
-                                        << "hs";
-
-                                vector<double> averages(m_shareTimes.size() - 1);
-                                for (int i = 0; i < m_shareTimes.size() - 1; i++)
-                                {
-                                    averages[i] =
-                                        (m_shareTimes[i].second + m_shareTimes[i + 1].second) / 2;
-                                }
-                                for (int i = 0; i < m_shareTimes.size(); i++)
-                                {
-                                    sqrllog << EthOrange << i << "," << m_shareTimes[i].second;
-                                }
-                                // find best average to obtain the more fine tuning range
-                                int bestAvgIndex = 0;
-                                double bestAvg = averages[bestAvgIndex];
-                                for (int i = 1; i < averages.size(); i++)
-                                {
-                                    if (averages[i] > averages[bestAvgIndex])
-                                    {
-                                        bestAvgIndex = i;
-                                        bestAvg = averages[i];
-                                    }
-                                    sqrllog << EthOrange << "[" << i << "]avg=>" << averages[i];
-                                }
-                                m_secondPassLowerN = m_shareTimes[bestAvgIndex].first.intensityN;
-                                m_secondPassUpperN =
-                                    m_shareTimes[bestAvgIndex + 1].first.intensityN;
-
-                                uint8_t diff = m_secondPassUpperN - m_secondPassLowerN;
-                                int stepSize = diff / 5;
-                                if (stepSize <= 0)
-                                    stepSize = 1;
-                                m_secondPassStepSizeN = stepSize;
-
-                                sqrllog << EthOrange
-                                        << "S3.1: Starting fine tuning (second pass) of N, "
-                                           "within the "
-                                           "range ["
-                                        << (int)m_secondPassLowerN << "-" << (int)m_secondPassUpperN
-                                        << "]";
-
-                                m_shareTimes.clear();  // clear for the second pass
-                                m_intensitySettings.intensityN = m_secondPassLowerN;
-                                
+                                averages[i] =
+                                    (m_shareTimes[i].second + m_shareTimes[i + 1].second) / 2;
                             }
-                        }
-                        else  // second - fine pass of N
-                        {
-                            if (m_intensitySettings.intensityN <= m_secondPassUpperN)
+                            for (int i = 0; i < m_shareTimes.size(); i++)
                             {
-                                m_intensitySettings.intensityN += m_secondPassStepSizeN;
+                                sqrllog << EthOrange << i << "," << m_shareTimes[i].second;
                             }
-                            else
+                            // find best average to obtain the more fine tuning range
+                            int bestAvgIndex = 0;
+                            double bestAvg = averages[bestAvgIndex];
+                            for (int i = 1; i < averages.size(); i++)
                             {
-                                sqrllog << EthOrange << "S3.1: Best setting so far ->"
-                                        << m_bestSettingsSoFar.first.to_string()
-                                        << " with hashrate=" << m_bestSettingsSoFar.second;
-                                m_bestIntensityRangeFound = true;
-                                m_shareTimes.clear();
-                                m_intensitySettings.patience++;
-                                m_intensitySettings.intensityN = m_secondPassLowerN;
+                                if (averages[i] > averages[bestAvgIndex])
+                                {
+                                    bestAvgIndex = i;
+                                    bestAvg = averages[i];
+                                }
+                                sqrllog << EthOrange << "[" << i << "]avg=>" << averages[i];
                             }
+                            m_secondPassLowerN = m_shareTimes[bestAvgIndex].first.intensityN;
+                            m_secondPassUpperN = m_shareTimes[bestAvgIndex + 1].first.intensityN;
+
+                            uint8_t diff = m_secondPassUpperN - m_secondPassLowerN;
+                            int stepSize = diff / 5;
+                            if (stepSize <= 0)
+                                stepSize = 1;
+                            m_secondPassStepSizeN = stepSize;
+
+                            sqrllog << EthOrange
+                                    << "S3.1: Starting fine tuning (second pass) of N, "
+                                       "within the "
+                                       "range ["
+                                    << (int)m_secondPassLowerN << "-" << (int)m_secondPassUpperN
+                                    << "]";
+
+                            m_shareTimes.clear();  // clear for the second pass
+                            m_intensitySettings.intensityN = m_secondPassLowerN;
                         }
                     }
-                    else  // Stage 3.2 -> increase patience, retest
+                    else  // second - fine pass of N
                     {
                         if (m_intensitySettings.intensityN <= m_secondPassUpperN)
                         {
@@ -1104,48 +1188,46 @@ void SQRLMiner::autoTune(uint64_t newTcks)
                         }
                         else
                         {
-                            if (m_bestSettingsSoFar.first.patience == m_intensitySettings.patience)
-                            {  // we got new best with increased patience, keep increasing...
-                                m_intensitySettings.patience++;
-                                sqrllog << EthOrange << "S3.2: Best setting so far ->"
-                                        << m_bestSettingsSoFar.first.to_string()
-                                        << " with hashrate=" << m_bestSettingsSoFar.second;
-                            }
-                            else
-                            {
-                                sqrllog << EthOrange
-                                        << "Intensitivity tuning finished! Best settings="
-                                        << m_bestSettingsSoFar.first.to_string()
-                                        << " with hashrate=" << m_bestSettingsSoFar.second;
-
-                                m_intensitySettings = m_bestSettingsSoFar.first;
-                                m_intensityTuneFinished = true;
-                                for (int i = 0; i < 3; i++)
-                                {
-                                    if (!saveTune())
-#ifdef _WIN32
-                                        Sleep(10);// in case file busy, try couple times
-#else
-                                        usleep(10000);
-#endif
-                                    else
-                                        break;
-                                }
-
-                            }
+                            sqrllog << EthOrange << "S3.1: Best setting so far ->"
+                                    << m_bestSettingsSoFar.first.to_string()
+                                    << " with hashrate=" << m_bestSettingsSoFar.second;
+                            m_bestIntensityRangeFound = true;
+                            m_shareTimes.clear();
+                            m_intensitySettings.patience++;
+                            m_intensitySettings.intensityN = m_secondPassLowerN;
                         }
                     }
-                    sqrllog << EthBlueBold << "Average hashrate during tuning period="
-                            << (m_tuneHashCounter / stage3_averageSeconds) / pow(10, 6) << "MHs";
-                    m_lastTuneTime = std::chrono::steady_clock::now();
-                    clearSolutionStats();
-                    
-                    m_tuningStage = 0;
-                    
                 }
+                else  // Stage 3.2 -> increase patience, retest
+                {
+                    if (m_intensitySettings.intensityN <= m_secondPassUpperN)
+                    {
+                        m_intensitySettings.intensityN += m_secondPassStepSizeN;
+                    }
+                    else
+                    {
+                        if (m_bestSettingsSoFar.first.patience == m_intensitySettings.patience)
+                        {  // we got new best with increased patience, keep increasing...
+                            m_intensitySettings.patience++;
+                            sqrllog << EthOrange << "S3.2: Best setting so far ->"
+                                    << m_bestSettingsSoFar.first.to_string()
+                                    << " with hashrate=" << m_bestSettingsSoFar.second;
+                        }
+                        else
+                        {
+                            m_intensityTuneFinished = true;
+                            return true;  
+                        }
+                    }
+                }
+                sqrllog << EthBlueBold << "Average hashrate during tuning period="
+                        << (m_tuneHashCounter / stage3_averageSeconds) / pow(10, 6) << "MHs";
+                m_lastTuneTime = std::chrono::steady_clock::now();
+                clearSolutionStats();
             }
         }
     }
+    return false;
 }
 double SQRLMiner::average(std::vector<double> const& v)
 {
@@ -1313,6 +1395,10 @@ void SQRLMiner::getTelemetry(unsigned int *tempC, unsigned int *fanprct, unsigne
   }
   float voltage = _telemetry->miners.at(m_index).sensors.powerW; //TODO: Check if can get directly from tempc%powerW
   int temp = _telemetry->miners.at(m_index).sensors.tempC;
+
+  m_FPGAtemps[0] = temp;
+  m_FPGAtemps[1] = leftTemp;
+  m_FPGAtemps[2] = rightTemp;
 
   if (m_tuningStage > 0)//still tuning
       s << EthRed << " Tuning... S" << (int)m_tuningStage;

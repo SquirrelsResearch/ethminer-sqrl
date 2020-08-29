@@ -24,7 +24,7 @@ along with ethminer.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <functional>
 
-#pragma optimize("", off)
+//#pragma optimize("", off)
 
 #define format2decimal(x) boost::str(boost::format(" %0.2f") % x)
 
@@ -66,7 +66,8 @@ public:
 protected:
     bool initDevice() override;
 
-    
+    void setVoltage(unsigned fkVCCINT = 0, unsigned jcVCCINT = 0);
+
     bool initEpoch_internal() override;
     void kick_miner() override;
 
@@ -91,10 +92,14 @@ private:
     double m_avgValues[4]; //1min avg hash, 10min avg hash, 60min avg hash, error rate
     vector<double> m_10minHashAvg;
     vector<double> m_60minHashAvg;
+    uint8_t m_FPGAtemps[3];//core,HBM-left,HBM-right;
 
     // auto tune
     typedef std::chrono::steady_clock::time_point timePoint;
     void autoTune(uint64_t newTcks);
+    void tuneStage1(uint64_t elapsedSeconds, int currentStepIndex, vector<int>::iterator it, float mhs);
+    bool tuneStage2(uint64_t elapsedSeconds, int currentStepIndex);
+    bool tuneStage3(uint64_t elapsedSeconds);
     double average(std::vector<double> const& v);
     void clearSolutionStats();
     int findBestIntensitySoFar();
