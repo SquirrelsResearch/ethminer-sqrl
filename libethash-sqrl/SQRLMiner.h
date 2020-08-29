@@ -61,6 +61,7 @@ public:
 
     void search(const dev::eth::WorkPackage& w);
     void processHashrateAverages(uint64_t newTcks);
+    bool temperatureSafetyCheck(int currentStepIndex);
     void getTelemetry(unsigned int *tempC, unsigned int *fanprct, unsigned int *powerW) override;
 
 protected:

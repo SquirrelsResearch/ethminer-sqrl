@@ -825,8 +825,8 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
         // Update the hash rate
         updateHashRate(1, newTChks);
 
-        if (m_settings.autoTune > 0)
-            autoTune(newTChks);
+        //Auto tune and temperature check
+        autoTune(newTChks);
        
         //For hashrate averages
         processHashrateAverages(newTChks);
@@ -875,25 +875,10 @@ void SQRLMiner::processHashrateAverages(uint64_t newTcks) {
         }
     
 }
-
-void SQRLMiner::autoTune(uint64_t newTcks)
+bool SQRLMiner::temperatureSafetyCheck(int currentStepIndex)
 {
-     if (std::find(m_settings.tuneExclude.begin(), m_settings.tuneExclude.end(), m_index) !=
-        m_settings.tuneExclude.end())  // if FPGA is excluded from tuning - don't bother
-        return;
-
-     m_tuneHashCounter += newTcks;
-
-     int maxCore = m_settings.tuneMaxCoreTemp;
-     int maxHBM = m_settings.tuneMaxHBMtemp;
-
-    float hash = RetrieveHashRate();
-    float mhs = hash / pow(10, 6);
-    auto it = std::find(_freqSteps.begin(), _freqSteps.end(), m_lastClk);
-    auto currentStepIndex = std::distance(_freqSteps.begin(), it);
-
-    auto elapsedSeconds = std::chrono::duration_cast<std::chrono::seconds>(
-        std::chrono::steady_clock::now() - (timePoint)m_lastTuneTime).count();
+    int maxCore = m_settings.tuneMaxCoreTemp;
+    int maxHBM = m_settings.tuneMaxHBMtemp;
 
     auto elapsedTempCheckSeconds = std::chrono::duration_cast<std::chrono::seconds>(
         std::chrono::steady_clock::now() - (timePoint)m_tuneTempCheckTimer)
@@ -901,11 +886,10 @@ void SQRLMiner::autoTune(uint64_t newTcks)
 
     if (elapsedTempCheckSeconds > 10)  // check every 10 sec
     {
-        if (getClock() == 0)
+        if (getClock() < 100)
         {
-            sqrllog << EthRed << "FPGA appears to have crashed! Tuning exiting...";
-            m_settings.autoTune = 0;
-            return;
+            sqrllog << EthRed << "FPGA appears to have crashed!";
+            return false;
         }
         int tempCore = m_FPGAtemps[0];
         int tempLeft = m_FPGAtemps[1];
@@ -914,10 +898,12 @@ void SQRLMiner::autoTune(uint64_t newTcks)
         if (tempCore >= maxCore || tempLeft >= maxHBM || tempRight >= maxHBM)
         {
             if (tempCore >= maxCore)
-                sqrllog << EthRed << "Core temperature reaching max set temp of "<<maxCore<<"C. Downclocking!";
+                sqrllog << EthRed << "Core temperature reaching max set temp of " << maxCore
+                        << "C. Downclocking!";
 
             if (tempLeft >= maxHBM || tempRight >= maxHBM)
-                sqrllog << EthRed << "HBM temperature reaching max set temp of " << maxHBM<< "C. Downclocking!";
+                sqrllog << EthRed << "HBM temperature reaching max set temp of " << maxHBM
+                        << "C. Downclocking!";
 
             if (currentStepIndex > 0)
             {
@@ -927,13 +913,11 @@ void SQRLMiner::autoTune(uint64_t newTcks)
             }
             else
             {
-                sqrllog << EthRed << "Cannot clock any lower! Tuning exiting...";
-                m_settings.autoTune = 0;
-                return;
-
+                sqrllog << EthRed << "Cannot clock any lower!";
+                return false;
             }
 
-            //Try and re-tune at lower clock and hope temps stay low
+            // Try and re-tune at lower clock and hope temps stay low
             m_maxFreqReached = true;
             m_stableFreqFound = false;
             m_intensityTuning = false;
@@ -945,6 +929,30 @@ void SQRLMiner::autoTune(uint64_t newTcks)
 
         m_tuneTempCheckTimer = std::chrono::steady_clock::now();
     }
+    return true;
+}
+
+void SQRLMiner::autoTune(uint64_t newTcks)
+{
+    auto it = std::find(_freqSteps.begin(), _freqSteps.end(), m_lastClk);
+    auto currentStepIndex = std::distance(_freqSteps.begin(), it);
+    if (!temperatureSafetyCheck(currentStepIndex))
+        return;
+
+
+    // if FPGA is excluded from tuning - don't bother
+    if (std::find(m_settings.tuneExclude.begin(), m_settings.tuneExclude.end(), m_index) !=
+    m_settings.tuneExclude.end())  
+    return;
+
+     m_tuneHashCounter += newTcks;
+
+    float hash = RetrieveHashRate();
+    float mhs = hash / pow(10, 6);
+    auto elapsedSeconds = std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::steady_clock::now() - (timePoint)m_lastTuneTime).count();
+
+
 
     bool tuningFinished = false;
    
