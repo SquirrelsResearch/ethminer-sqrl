@@ -53,6 +53,9 @@ SQRLAXIResult SQRLAXIWriteBulk(SQRLAXIRef self, uint8_t * buf, uint32_t len, uin
 // Read from an AXI address
 SQRLAXIResult SQRLAXIRead(SQRLAXIRef self, uint32_t * dataOut, uint64_t address);
 
+// Issues a uart "SelfTest" command, which does not depend on the AXI bus working
+SQRLAXIResult SQRLAXITest(SQRLAXIRef self);
+
 // DMA support
 SQRLAXIResult SQRLAXICDMAWriteBytes(SQRLAXIRef self, uint8_t *buffer, uint32_t len, uint64_t destAddr);
 SQRLAXIResult SQRLAXICDMAReadBytes(SQRLAXIRef self, uint8_t *buffer, uint32_t len, uint64_t srcAddr);
@@ -66,6 +69,9 @@ SQRLAXIResult SQRLAXIWaitForInterrupt(SQRLAXIRef self, uint8_t interrupt, uint64
 
 // Causes any threads blocked on WaitForInterrupt to immediately kick with SQRLAXIResultTimedOut
 SQRLAXIResult SQRLAXIKickInterrupts(SQRLAXIRef self);
+
+// Parameters
+SQRLAXIResult SQRLAXISetTimeout(SQRLAXIRef self, uint32_t timeoutInMs);
 
 
 #ifdef __cplusplus

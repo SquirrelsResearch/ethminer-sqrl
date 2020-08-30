@@ -99,6 +99,9 @@ typedef struct _SQRLAXI {
   sqrlcond_t wCond;
   sqrlmutex_t iMutex;
   sqrlcond_t iCond;
+
+  // Parameters
+  uint32_t axiTimeoutMs;
 } SQRLAXI;	
 
 // Static Helpers
@@ -329,7 +332,7 @@ SQRLAXIResult _SQRLAXIDoTransaction(SQRLAXIRef self, uint8_t * reqPkt, uint8_t *
 
   if (respPkt != NULL) {
     // Wait for a response!
-    uint32_t timeoutInMs = 100;
+    uint32_t timeoutInMs = self->axiTimeoutMs / 10;
     uint8_t timeoutCount = 10;
     for(;;) {
       SQRLMutexLock(&self->wMutex);
@@ -363,7 +366,7 @@ SQRLAXIResult _SQRLAXIDoTransaction(SQRLAXIRef self, uint8_t * reqPkt, uint8_t *
       }
       SQRLMutexUnlock(&self->wMutex);
       if (timeoutCount == 0) {
-        printf("AXI Timeout!\n");
+        printf("AXI Timeout Expired - Communications Error - %i ms\n", self->axiTimeoutMs);
 	SQRLMutexLock(&self->wMutex);
 	self->workPkts[pktSlot].respTimedOut = true;
 	self->workPkts[pktSlot].respRcvd = true;
@@ -402,6 +405,7 @@ SQRLAXIRef SQRLAXICreate(SQRLAXIConnectionType connection, char * hostOrFTDISeri
     self->wPktRd = 0;
     self->iPktWr = 0;
     self->iPktRd = 0;
+    self->axiTimeoutMs = 250;
 
     if (self->type == SQRLAXIConnectionTCP) {
       // Lookup ddress
@@ -521,6 +525,23 @@ SQRLAXIResult SQRLAXIRead(SQRLAXIRef self, uint32_t * dataOut, uint64_t address)
     result |= (respPkt[12] << 8);
     result |= (respPkt[13] << 0);
     *dataOut = result;
+  }
+  return res;
+}
+
+SQRLAXIResult SQRLAXITest(SQRLAXIRef self) {
+  if (self->fd == INVALID_SOCKET) return SQRLAXIResultNotConnected;
+  // Do the transaction
+  uint8_t reqPkt[16];
+  uint8_t respPkt[16];
+  _SQRLAXIMakePacket(reqPkt, 0x00, self->seq++, 0x12345678, 0xAAAAAAAA);
+  SQRLAXIResult res = _SQRLAXIDoTransaction(self, reqPkt, respPkt);
+  if (res == SQRLAXIResultOK) {
+    printf("Test Response: ");
+    for(int i=0; i < 16; i++) {
+      printf("%02hhx", respPkt[i]);
+    }
+    printf("\n");
   }
   return res;
 }
@@ -1003,6 +1024,11 @@ SQRLAXIResult SQRLAXIKickInterrupts(SQRLAXIRef self) {
   pthread_cond_broadcast(&self->iCond);
 #endif
   SQRLMutexUnlock(&self->iMutex);
+  return SQRLAXIResultOK;
+}
+
+SQRLAXIResult SQRLAXISetTimeout(SQRLAXIRef self, uint32_t timeoutInMs) {
+  self->axiTimeoutMs = timeoutInMs;
   return SQRLAXIResultOK;
 }
 

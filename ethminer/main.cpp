@@ -374,6 +374,11 @@ public:
 
 	app.add_option("--sqrl-dag-mixers", m_SQSettings.dagMixers, "Number of DAG mixers in the loaded bitstream (Rarely Used)", true)->check(CLI::Range(1,16));
 	app.add_option("--sqrl-hbm-stats", m_SQSettings.showHBMStats, "Show HBM Temperature/Calibration stats", true);
+	app.add_flag("--sqrl-force-dag", m_SQSettings.forceDAG, "Force DAG to regenerate");
+	app.add_flag("--sqrl-skip-dag", m_SQSettings.skipDAG, "Bypass actual DAG generation (Results will be corrupt but hashrate accurate for tuning");
+
+	// AXI Timeout control
+	app.add_option("--sqrl-axi-timeout", m_SQSettings.axiTimeoutMs, "AXI maximum latency in milliseconds", true);
 
     //Tune
     app.add_option("--auto-tune", m_SQSettings.autoTune, " 0 - no auto-tune, 1 - just reach max stable freq, 2 - downclock till low errror rate, 3 - tune intensity, 4- downclock voltage",true)->check(CLI::Range(0, 4));

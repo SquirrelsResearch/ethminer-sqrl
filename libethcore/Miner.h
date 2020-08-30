@@ -139,6 +139,10 @@ struct SQSettings : public MinerSettings
    unsigned tuneTime = 60;
    unsigned tuneMaxClk = 600;
    bool showHBMStats = true;
+   bool forceDAG = false; 
+   bool skipDAG = false; // DEV - 'fake' building dag to test hashrate only
+   vector<uint8_t> exclude;
+   unsigned axiTimeoutMs = 250;
    vector<uint8_t> tuneExclude;
    string tuneFile = "";
    unsigned tuneMaxCoreTemp = 85;
