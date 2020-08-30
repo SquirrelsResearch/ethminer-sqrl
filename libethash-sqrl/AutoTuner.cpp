@@ -1,8 +1,5 @@
 #include "AutoTuner.h"
 
-#pragma once
-
-
 using namespace std;
 using namespace dev;
 using namespace eth;
@@ -335,6 +332,7 @@ bool AutoTuner::tuneStage3(uint64_t elapsedSeconds)
                         }
                         else
                         {
+                            _intensitySettings = _bestSettingsSoFar.first;
                             _intensityTuneFinished = true;
                             return true;
                         }
