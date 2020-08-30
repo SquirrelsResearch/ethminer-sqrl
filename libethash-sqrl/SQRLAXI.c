@@ -405,7 +405,7 @@ SQRLAXIRef SQRLAXICreate(SQRLAXIConnectionType connection, char * hostOrFTDISeri
     self->wPktRd = 0;
     self->iPktWr = 0;
     self->iPktRd = 0;
-    self->axiTimeoutMs = 250000;
+    self->axiTimeoutMs = 250;
 
     if (self->type == SQRLAXIConnectionTCP) {
       // Lookup ddress
