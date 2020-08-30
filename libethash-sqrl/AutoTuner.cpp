@@ -86,7 +86,9 @@ void AutoTuner::tuneStage1(
 
     // Stage 1:
     int stage1_averageSeconds = 60;
-    float stabilityThreshold = 20;  // mhs
+    float throughput = (float)_intensitySettings.intensityN /
+                       (_intensitySettings.intensityN + _intensitySettings.intensityD);
+    float stabilityThreshold = ((_lastClock / 8) * throughput) * .9;
 
 
     if (elapsedSeconds > stage1_averageSeconds)
