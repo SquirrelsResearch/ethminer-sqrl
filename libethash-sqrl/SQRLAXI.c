@@ -529,6 +529,23 @@ SQRLAXIResult SQRLAXIRead(SQRLAXIRef self, uint32_t * dataOut, uint64_t address)
   return res;
 }
 
+SQRLAXIResult SQRLAXITest(SQRLAXIRef self) {
+  if (self->fd == INVALID_SOCKET) return SQRLAXIResultNotConnected;
+  // Do the transaction
+  uint8_t reqPkt[16];
+  uint8_t respPkt[16];
+  _SQRLAXIMakePacket(reqPkt, 0x00, self->seq++, 0x12345678, 0xAAAAAAAA);
+  SQRLAXIResult res = _SQRLAXIDoTransaction(self, reqPkt, respPkt);
+  if (res == SQRLAXIResultOK) {
+    printf("Test Response: ");
+    for(int i=0; i < 16; i++) {
+      printf("%02hhx", respPkt[i]);
+    }
+    printf("\n");
+  }
+  return res;
+}
+
 // Write to an AXI address - MUST BE THREADSAFE
 SQRLAXIResult SQRLAXIWriteBulk(SQRLAXIRef self, uint8_t * buf, uint32_t len, uint64_t address, uint8_t swapEndian) {
   if (self->fd == INVALID_SOCKET) return SQRLAXIResultNotConnected;
