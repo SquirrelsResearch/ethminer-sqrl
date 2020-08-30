@@ -144,7 +144,7 @@ struct SQSettings : public MinerSettings
    vector<uint8_t> exclude;
    unsigned axiTimeoutMs = 250;
    vector<uint8_t> tuneExclude;
-   string tuneFile = "";
+   string tuneFile = "tune.txt";
    unsigned tuneMaxCoreTemp = 85;
    unsigned tuneMaxHBMtemp = 80;
 };

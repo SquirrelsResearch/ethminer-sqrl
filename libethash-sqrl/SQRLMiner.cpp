@@ -290,8 +290,13 @@ bool SQRLMiner::initDevice()
       }
 
       sqrllog << "TuneID=" << m_settingID;
-      if (m_settings.tuneFile != "")
-          m_tuner->readSavedTunes(m_settings.tuneFile, m_settingID);
+      if (boost::filesystem::exists(m_settings.tuneFile) && m_settings.autoTune > 0)
+      {
+          bool tuneFound = m_tuner->readSavedTunes(m_settings.tuneFile, m_settingID);
+
+          if (tuneFound)
+            m_settings.autoTune = 0; //if tune file exists, apply the tune and disable auto-tuning
+      }
       
 
 

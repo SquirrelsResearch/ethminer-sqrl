@@ -80,7 +80,7 @@ public:
 
     void startTune(double clk);
     void tune(uint64_t newTcks);
-    void readSavedTunes(string fileName, string settingID);
+    bool readSavedTunes(string fileName, string settingID);
     float getHardwareErrorRate();
     uint8_t getTuningStage() { return _tuningStage; }
     IntensitySettings getIntensitySettings() { return _intensitySettings; }

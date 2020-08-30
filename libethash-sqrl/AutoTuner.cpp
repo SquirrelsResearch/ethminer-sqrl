@@ -375,17 +375,18 @@ void AutoTuner::clearSolutionStats()
     _tuneHashCounter = 0;
 }
 
-void AutoTuner::readSavedTunes(string fileName, string settingID)
+bool AutoTuner::readSavedTunes(string fileName, string settingID)
 {
     // if FPGA is excluded from tuning - don't bother
     if (std::find(_settings->tuneExclude.begin(), _settings->tuneExclude.end(), _minerIndex) !=
         _settings->tuneExclude.end())
-        return;
+        return false;
 
     try
     {
         std::ifstream myfile(fileName);
         std::string line;
+        bool tuneFound = false;
         while (std::getline(myfile, line))
         {
             std::vector<std::string> words;
@@ -400,15 +401,19 @@ void AutoTuner::readSavedTunes(string fileName, string settingID)
                     _settings->patience = stoi(words[2]);
                     _settings->intensityN = stoi(words[3]);
                     _settings->intensityD = stoi(words[4]);
+                    tuneFound = true;
                 }
             }
         }
+        if (tuneFound)
+            return true;
     }
     catch (const exception& e)
     {
         sqrllog << EthRed << "Failed to parse tune file! ";
         sqrllog << EthRed << e.what();
     }
+    return false;
 }
 
 bool AutoTuner::saveTune()
