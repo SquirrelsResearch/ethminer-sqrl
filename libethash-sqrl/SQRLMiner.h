@@ -76,7 +76,7 @@ protected:
    
 
 private:
-    string m_settingID = "";  // DNA_bitstream_V
+    string m_settingID = "";  // DNA_bitstream_V used for saving tuning config
 
     atomic<bool> m_new_work = {false};
     atomic<bool> m_dagging = {false};
