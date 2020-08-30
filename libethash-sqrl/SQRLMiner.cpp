@@ -355,7 +355,13 @@ void SQRLMiner::setVoltage(unsigned fkVCCINT, unsigned jcVCCINT)
             SQRLAXIWrite(m_axi, 0xf3, 0xA108, false); // Transmit FIFO byte 3 // vEnc[0]
             SQRLAXIWrite(m_axi, 0x200 | 0xe0, 0xA108, false); // Transmit FIFO byte 4 // vEnc[1] (With Stop)
             SQRLAXIWrite(m_axi, 0x1, 0xA100, false); // Send IIC transaction 	
+
+#ifdef _WIN32
+            Sleep(1000); 
+#else
             usleep(1000000);
+#endif
+
             SQRLAXIWrite(m_axi, 0xA, 0xA040, false); // Soft Reset IIC 	
             SQRLAXIWrite(m_axi, 0x100 | (0x4d << 1), 0xA108, false); // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia) 	
             SQRLAXIWrite(m_axi, 0xD0, 0xA108, false); // Transmit FIFO byte 2 (SingleShotPage+Cmd)
@@ -367,8 +373,11 @@ void SQRLMiner::setVoltage(unsigned fkVCCINT, unsigned jcVCCINT)
             SQRLAXIWrite(m_axi, 0x1, 0xA100, false); // Send IIC transaction 	
 
             sqrllog << "Asking JCM VRM, if present, to target " << m_settings.jcVCCINT << "mv";
-
+#ifdef _WIN32
+            Sleep(1000);
+#else
             usleep(1000000);
+#endif
             uint16_t vEnc = (uint16_t)(((double)m_settings.jcVCCINT / 1000.0) * 256.0);
             SQRLAXIWrite(m_axi, 0xA, 0xA040, false); // Soft Reset IIC 	
             SQRLAXIWrite(m_axi, 0x100 | (0x4d << 1), 0xA108, false); // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia) 	
