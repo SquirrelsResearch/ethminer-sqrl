@@ -984,6 +984,7 @@ double SQRLMiner::setClock(double targetClk) {
     SQRLAXIWrite(m_axi, 0xFFFFFFFF, 0xB000, true);   
   }
   if (targetClk > 0) {
+      targetClk += 1; //fix for any rounding issues
     double desiredDiv = vco/targetClk;
     // Adjust to be multiple of 0.125 (round up == closed without going over
     desiredDiv = ((double)((int)(desiredDiv * 8 + 0.99))) / 8.0;
