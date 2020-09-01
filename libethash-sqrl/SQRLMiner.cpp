@@ -1350,6 +1350,8 @@ void SQRLMiner::getTelemetry(unsigned int *tempC, unsigned int *fanprct, unsigne
   // Read the HBM stack control values
   if(SQRLAXIResultOK != SQRLAXIRead(m_axi, &raw, 0x7008)) {
     raw = 0;
+    // Force "calibrated" TODO
+    raw |= 0x3;
   }
   axiMutex.unlock();
   // Left CAL, Right CL, Left CAT, Left 7 bit, Right CAT (Meow), Right 7bit 
