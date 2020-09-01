@@ -272,11 +272,11 @@ bool SQRLMiner::initDevice()
 
       InitVoltageTbl();
 
-      m_settingID += format2decimal(m_settings.fkVCCINT);
-      m_settingID += format2decimal(m_settings.jcVCCINT);
+      m_settingID += format2decimal(m_settings.fkVCCINT.at(m_index));
+      m_settingID += format2decimal(m_settings.jcVCCINT.at(m_index));
 
      
-      setVoltage(m_settings.fkVCCINT, m_settings.jcVCCINT);
+      setVoltage(m_settings.fkVCCINT.at(m_index), m_settings.jcVCCINT.at(m_index));
      
 
       // Initialize clk
@@ -329,12 +329,12 @@ void SQRLMiner::setVoltage(unsigned fkVCCINT, unsigned jcVCCINT)
         else  // Set voltage if asked
         {
             uint32_t tmv;
-            uint8_t tWiper = FindClosestVIDToVoltage(((double)m_settings.fkVCCINT / 1000.0));
+            uint8_t tWiper = FindClosestVIDToVoltage(((double)fkVCCINT / 1000.0));
             tmv = (uint32_t)(LookupVID(tWiper) * 1000.0);
 
             sqrllog << "Found wiper code " << to_string(tWiper) << " for voltage " << to_string(tmv) << "mV.\n";
 
-            sqrllog << "Instructing FK VRM, if present, to target " << m_settings.fkVCCINT << "mv";
+            sqrllog << "Instructing FK VRM, if present, to target " << fkVCCINT << "mv";
             sqrllog << "Closest Viable Voltage " << tmv << "mv";
             SQRLAXIWrite(m_axi, 0xA, 0x9040, false);
             SQRLAXIWrite(m_axi, 0x158, 0x9108, false);
@@ -377,13 +377,13 @@ void SQRLMiner::setVoltage(unsigned fkVCCINT, unsigned jcVCCINT)
             SQRLAXIWrite(m_axi, 0x200 | 0xe0, 0xA108, false); // Transmit FIFO byte 4 // vEnc[1] (With Stop)
             SQRLAXIWrite(m_axi, 0x1, 0xA100, false); // Send IIC transaction 	
 
-            sqrllog << "Asking JCM VRM, if present, to target " << m_settings.jcVCCINT << "mv";
+            sqrllog << "Asking JCM VRM, if present, to target " << jcVCCINT << "mv";
 #ifdef _WIN32
             Sleep(1000);
 #else
             usleep(1000000);
 #endif
-            uint16_t vEnc = (uint16_t)(((double)m_settings.jcVCCINT / 1000.0) * 256.0);
+            uint16_t vEnc = (uint16_t)(((double)jcVCCINT / 1000.0) * 256.0);
             SQRLAXIWrite(m_axi, 0xA, 0xA040, false); // Soft Reset IIC 	
             SQRLAXIWrite(m_axi, 0x100 | (0x4d << 1), 0xA108, false); // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia) 	
             SQRLAXIWrite(m_axi, 0xD0, 0xA108, false); // Transmit FIFO byte 2 (SingleShotPage+Cmd)
@@ -1231,5 +1231,11 @@ void SQRLMiner::enumDevices(std::map<string, DeviceDescriptor>& _DevicesCollecti
 	deviceDescriptor.targetClk = _settings.targetClk;
 
         _DevicesCollection[uniqueId] = deviceDescriptor;
+
+        if (_settings.fkVCCINT.size() > numDevices) //fill empty space
+            _settings.fkVCCINT.push_back(0);
+        
+        if (_settings.jcVCCINT.size() > numDevices)  // fill empty space
+            _settings.jcVCCINT.push_back(0);
     }
 }
