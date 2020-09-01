@@ -1256,7 +1256,7 @@ double SQRLMiner::setClock(double targetClk) {
     SQRLAXIWrite(m_axi, 0xFFFFFFFF, 0xB000, true);   
   }
   if (targetClk > 0) {
-    double desiredDiv = vco/targetClk;
+    double desiredDiv = vco/(targetClk+1); // Handles rounding when user tries to set a "UI" clock
     // Adjust to be multiple of 0.125 (round up == closed without going over
     desiredDiv = ((double)((int)(desiredDiv * 8 + 0.99))) / 8.0;
     if (desiredDiv < 2.0) {
