@@ -336,8 +336,10 @@ SQRLAXIResult _SQRLAXIDoTransaction(SQRLAXIRef self, uint8_t * reqPkt, uint8_t *
     uint8_t timeoutCount = 10;
     for(;;) {
       SQRLMutexLock(&self->wMutex);
+      bool timedOut = false;
 #ifdef _WIN32
-      SleepConditionVariableCS(&self->wCond, &self->wMutex, timeoutInMs);
+      BOOL res = SleepConditionVariableCS(&self->wCond, &self->wMutex, timeoutInMs);
+      timedOut = (res?true:false);
 #else
       struct timespec timeout;
       timespec_get(&timeout, TIME_UTC);
@@ -346,9 +348,11 @@ SQRLAXIResult _SQRLAXIDoTransaction(SQRLAXIRef self, uint8_t * reqPkt, uint8_t *
     
       timeout.tv_sec = (sec + (nsec/1000000000ULL));
       timeout.tv_nsec = (nsec % 1000000000ULL); 
-      pthread_cond_timedwait(&self->wCond, &self->wMutex, &timeout);
+      int pthread_res = pthread_cond_timedwait(&self->wCond, &self->wMutex, &timeout);
+      if (pthread_res == ETIMEDOUT) timedOut = true;
 #endif
-      timeoutCount--;
+      if (timedOut)
+        timeoutCount--;
 
       // Check our pkt
       if (self->workPkts[pktSlot].respRcvd || self->workPkts[pktSlot].respTimedOut) {
@@ -405,7 +409,7 @@ SQRLAXIRef SQRLAXICreate(SQRLAXIConnectionType connection, char * hostOrFTDISeri
     self->wPktRd = 0;
     self->iPktWr = 0;
     self->iPktRd = 0;
-    self->axiTimeoutMs = 250000;
+    self->axiTimeoutMs = 250;
 
     if (self->type == SQRLAXIConnectionTCP) {
       // Lookup ddress
@@ -525,6 +529,23 @@ SQRLAXIResult SQRLAXIRead(SQRLAXIRef self, uint32_t * dataOut, uint64_t address)
     result |= (respPkt[12] << 8);
     result |= (respPkt[13] << 0);
     *dataOut = result;
+  }
+  return res;
+}
+
+SQRLAXIResult SQRLAXITest(SQRLAXIRef self) {
+  if (self->fd == INVALID_SOCKET) return SQRLAXIResultNotConnected;
+  // Do the transaction
+  uint8_t reqPkt[16];
+  uint8_t respPkt[16];
+  _SQRLAXIMakePacket(reqPkt, 0x00, self->seq++, 0x12345678, 0xAAAAAAAA);
+  SQRLAXIResult res = _SQRLAXIDoTransaction(self, reqPkt, respPkt);
+  if (res == SQRLAXIResultOK) {
+    printf("Test Response: ");
+    for(int i=0; i < 16; i++) {
+      printf("%02hhx", respPkt[i]);
+    }
+    printf("\n");
   }
   return res;
 }

@@ -189,8 +189,11 @@ uint8_t SQRLMiner::FindClosestVIDToVoltage(double ReqVoltage)
 	uint8_t idx = 0x80;
 		
 	// Normal idiot checks - including ensuring the requested voltage
-	// is both above the minimum, yet below the maximum...
-	if((ReqVoltage < SQRLMiner::VoltageTbl[0xFF]) || (ReqVoltage > SQRLMiner::VoltageTbl[0x00]))
+	// is both above the minimum, yet below the maximum - if not,
+	// clamp the voltage value to the possible range.
+	if(ReqVoltage <= SQRLMiner::VoltageTbl[0xFF])
+		return(0xFF);
+	else if(ReqVoltage >= SQRLMiner::VoltageTbl[0x00])
 		return(0x00);
 	
 	for(int half = 0x40; half > 0x00; half >>= 1)
@@ -272,7 +275,6 @@ bool SQRLMiner::initDevice()
       {
 		uint32_t tmv;
 		uint8_t tWiper = FindClosestVIDToVoltage(((double)m_settings.fkVCCINT / 1000.0));
-		if(!tWiper) tWiper = 0x44;
 		tmv = (uint32_t)(LookupVID(tWiper) * 1000.0);
 	 
 		sqrllog << "Found wiper code " << to_string(tWiper) << " for voltage " << to_string(tmv) << "mV.\n";
@@ -287,6 +289,16 @@ bool SQRLMiner::initDevice()
       }
       if (m_settings.jcVCCINT > 500) {
         sqrllog << "Applying JCM PMIC Hot Fix";
+        SQRLAXIWrite(m_axi, 0xA, 0xA040, false); // Soft Reset IIC 	
+        SQRLAXIWrite(m_axi, 0x100|(0x4d<<1), 0xA108, false); // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia) 	
+        SQRLAXIWrite(m_axi, 0xD0, 0xA108, false); // Transmit FIFO byte 2 (SingleShotPage+Cmd)
+        SQRLAXIWrite(m_axi, 0x04, 0xA108, false); // Transmit FIFO byte 3 (Write)
+        SQRLAXIWrite(m_axi, 0x24, 0xA108, false); // Transmit FIFO byte 4 (AddrLo (CMD)	
+        SQRLAXIWrite(m_axi, 0x08, 0xA108, false); // Transmit FIFO byte 2, VCCBRAM loop PID 
+        SQRLAXIWrite(m_axi, 0x22 , 0xA108, false); // Transmit FIFO byte 3 // new param lo
+        SQRLAXIWrite(m_axi, 0x200 | 0x30, 0xA108, false); // Transmit FIFO byte 4 // new param hi (With Stop)
+        SQRLAXIWrite(m_axi, 0x1, 0xA100, false); // Send IIC transaction 	
+        usleep(1000000);
         SQRLAXIWrite(m_axi, 0xA, 0xA040, false); // Soft Reset IIC 	
         SQRLAXIWrite(m_axi, 0x100|(0x4d<<1), 0xA108, false); // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia) 	
         SQRLAXIWrite(m_axi, 0xD0, 0xA108, false); // Transmit FIFO byte 2 (SingleShotPage+Cmd)
@@ -1262,7 +1274,7 @@ double SQRLMiner::setClock(double targetClk) {
     SQRLAXIWrite(m_axi, 0xFFFFFFFF, 0xB000, true);   
   }
   if (targetClk > 0) {
-    double desiredDiv = vco/targetClk;
+    double desiredDiv = vco/(targetClk+1); // Handles rounding when user tries to set a "UI" clock
     // Adjust to be multiple of 0.125 (round up == closed without going over
     desiredDiv = ((double)((int)(desiredDiv * 8 + 0.99))) / 8.0;
     if (desiredDiv < 2.0) {
