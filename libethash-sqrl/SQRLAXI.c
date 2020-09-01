@@ -336,8 +336,10 @@ SQRLAXIResult _SQRLAXIDoTransaction(SQRLAXIRef self, uint8_t * reqPkt, uint8_t *
     uint8_t timeoutCount = 10;
     for(;;) {
       SQRLMutexLock(&self->wMutex);
+      bool timedOut = false;
 #ifdef _WIN32
-      SleepConditionVariableCS(&self->wCond, &self->wMutex, timeoutInMs);
+      BOOL res = SleepConditionVariableCS(&self->wCond, &self->wMutex, timeoutInMs);
+      timedOut = (res?true:false);
 #else
       struct timespec timeout;
       timespec_get(&timeout, TIME_UTC);
@@ -346,9 +348,11 @@ SQRLAXIResult _SQRLAXIDoTransaction(SQRLAXIRef self, uint8_t * reqPkt, uint8_t *
     
       timeout.tv_sec = (sec + (nsec/1000000000ULL));
       timeout.tv_nsec = (nsec % 1000000000ULL); 
-      pthread_cond_timedwait(&self->wCond, &self->wMutex, &timeout);
+      int pthread_res = pthread_cond_timedwait(&self->wCond, &self->wMutex, &timeout);
+      if (pthread_res == ETIMEDOUT) timedOut = true;
 #endif
-      timeoutCount--;
+      if (timedOut)
+        timeoutCount--;
 
       // Check our pkt
       if (self->workPkts[pktSlot].respRcvd || self->workPkts[pktSlot].respTimedOut) {
