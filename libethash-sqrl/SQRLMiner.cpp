@@ -293,6 +293,16 @@ bool SQRLMiner::initDevice()
         SQRLAXIWrite(m_axi, 0x100|(0x4d<<1), 0xA108, false); // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia) 	
         SQRLAXIWrite(m_axi, 0xD0, 0xA108, false); // Transmit FIFO byte 2 (SingleShotPage+Cmd)
         SQRLAXIWrite(m_axi, 0x04, 0xA108, false); // Transmit FIFO byte 3 (Write)
+        SQRLAXIWrite(m_axi, 0x24, 0xA108, false); // Transmit FIFO byte 4 (AddrLo (CMD)	
+        SQRLAXIWrite(m_axi, 0x08, 0xA108, false); // Transmit FIFO byte 2, VCCBRAM loop PID 
+        SQRLAXIWrite(m_axi, 0x22 , 0xA108, false); // Transmit FIFO byte 3 // new param lo
+        SQRLAXIWrite(m_axi, 0x200 | 0x30, 0xA108, false); // Transmit FIFO byte 4 // new param hi (With Stop)
+        SQRLAXIWrite(m_axi, 0x1, 0xA100, false); // Send IIC transaction 	
+        usleep(1000000);
+        SQRLAXIWrite(m_axi, 0xA, 0xA040, false); // Soft Reset IIC 	
+        SQRLAXIWrite(m_axi, 0x100|(0x4d<<1), 0xA108, false); // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia) 	
+        SQRLAXIWrite(m_axi, 0xD0, 0xA108, false); // Transmit FIFO byte 2 (SingleShotPage+Cmd)
+        SQRLAXIWrite(m_axi, 0x04, 0xA108, false); // Transmit FIFO byte 3 (Write)
         SQRLAXIWrite(m_axi, 0xAA, 0xA108, false); // Transmit FIFO byte 4 (AddrLo (CMD)	
         SQRLAXIWrite(m_axi, 0x0A, 0xA108, false); // Transmit FIFO byte 2, VCCBRAM_OV_FAULT 
         SQRLAXIWrite(m_axi, 0xf3 , 0xA108, false); // Transmit FIFO byte 3 // vEnc[0]
