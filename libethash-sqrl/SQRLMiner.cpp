@@ -355,18 +355,30 @@ void SQRLMiner::setVoltage(unsigned fkVCCINT, unsigned jcVCCINT)
             SQRLAXIWrite(m_axi, 0x100 | (0x4d << 1), 0xA108, false); // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia) 	
             SQRLAXIWrite(m_axi, 0xD0, 0xA108, false); // Transmit FIFO byte 2 (SingleShotPage+Cmd)
             SQRLAXIWrite(m_axi, 0x04, 0xA108, false); // Transmit FIFO byte 3 (Write)
+            SQRLAXIWrite(m_axi, 0x24, 0xA108, false); // Transmit FIFO byte 4 (AddrLo (CMD)	
+            SQRLAXIWrite(m_axi, 0x08, 0xA108, false); // Transmit FIFO byte 2, VCCBRAM loop PID 
+            SQRLAXIWrite(m_axi, 0x22, 0xA108, false); // Transmit FIFO byte 3 // new param lo
+            SQRLAXIWrite(m_axi, 0x200 | 0x30, 0xA108, false); // Transmit FIFO byte 4 // new param hi (With Stop)
+            SQRLAXIWrite(m_axi, 0x1, 0xA100, false); // Send IIC transaction 	
+#ifdef _WIN32
+            Sleep(1000);
+#else
+            usleep(1000000);
+#endif
+            SQRLAXIWrite(m_axi, 0xA, 0xA040, false); // Soft Reset IIC 	
+            SQRLAXIWrite(m_axi, 0x100 | (0x4d << 1), 0xA108, false); // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia) 	
+            SQRLAXIWrite(m_axi, 0xD0, 0xA108, false); // Transmit FIFO byte 2 (SingleShotPage+Cmd)
+            SQRLAXIWrite(m_axi, 0x04, 0xA108, false); // Transmit FIFO byte 3 (Write)
             SQRLAXIWrite(m_axi, 0xAA, 0xA108, false); // Transmit FIFO byte 4 (AddrLo (CMD)	
             SQRLAXIWrite(m_axi, 0x0A, 0xA108, false); // Transmit FIFO byte 2, VCCBRAM_OV_FAULT 
             SQRLAXIWrite(m_axi, 0xf3, 0xA108, false); // Transmit FIFO byte 3 // vEnc[0]
             SQRLAXIWrite(m_axi, 0x200 | 0xe0, 0xA108, false); // Transmit FIFO byte 4 // vEnc[1] (With Stop)
             SQRLAXIWrite(m_axi, 0x1, 0xA100, false); // Send IIC transaction 	
-
 #ifdef _WIN32
-            Sleep(1000); 
+            Sleep(1000);
 #else
             usleep(1000000);
 #endif
-
             SQRLAXIWrite(m_axi, 0xA, 0xA040, false); // Soft Reset IIC 	
             SQRLAXIWrite(m_axi, 0x100 | (0x4d << 1), 0xA108, false); // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia) 	
             SQRLAXIWrite(m_axi, 0xD0, 0xA108, false); // Transmit FIFO byte 2 (SingleShotPage+Cmd)
@@ -378,6 +390,7 @@ void SQRLMiner::setVoltage(unsigned fkVCCINT, unsigned jcVCCINT)
             SQRLAXIWrite(m_axi, 0x1, 0xA100, false); // Send IIC transaction 	
 
             sqrllog << "Asking JCM VRM, if present, to target " << jcVCCINT << "mv";
+
 #ifdef _WIN32
             Sleep(1000);
 #else
@@ -392,13 +405,31 @@ void SQRLMiner::setVoltage(unsigned fkVCCINT, unsigned jcVCCINT)
             SQRLAXIWrite(m_axi, 0x06, 0xA108, false); // Transmit FIFO byte 2, VOUT CMD 
             SQRLAXIWrite(m_axi, 0x0 | (vEnc & 0xFF), 0xA108, false); // Transmit FIFO byte 3 // vEnc[0]
             SQRLAXIWrite(m_axi, 0x200 | ((vEnc >> 8) & 0xFF), 0xA108, false); // Transmit FIFO byte 4 // vEnc[1] (With Stop)
-            SQRLAXIWrite(m_axi, 0x1, 0xA100, false); // Send IIC transaction 
-        }
+            SQRLAXIWrite(m_axi, 0x1, 0xA100, false); // Send IIC transaction 	
+      }
+
+      // Initialize clk
+      sqrllog << "Stock Clock: " << setClock(-2);
+      if ( m_deviceDescriptor.targetClk != 0) {
+        sqrllog << "Target Clock: " << m_deviceDescriptor.targetClk; 
+	// Target Clock set after Dag Generation
+	m_lastClk = m_deviceDescriptor.targetClk;
+      } else {
+        m_lastClk = getClock();
+      }
+      // Print the settings
+      sqrllog << "WorkDelay: " << m_settings.workDelay;
+      sqrllog << "Patience: " << m_settings.patience;
+      sqrllog << "IntensityN: " << m_settings.intensityN;
+      sqrllog << "IntensityD: " << m_settings.intensityD;
+      sqrllog << "SkipStallDetect: " << m_settings.skipStallDetection;
+    } else {
+      sqrllog << m_deviceDescriptor.name << " Failed to Connect";
+      m_axi = NULL;
     }
-}
-double SQRLMiner::average(std::vector<double> const& v)
-{
-    return std::accumulate(v.begin(), v.end(), 0.0) / v.size();
+
+    DEV_BUILD_LOG_PROGRAMFLOW(sqrllog, "sq-" << m_index << " SQRLMiner::initDevice end");
+    return (m_axi != 0);
 }
 
     /*
@@ -984,8 +1015,7 @@ double SQRLMiner::setClock(double targetClk) {
     SQRLAXIWrite(m_axi, 0xFFFFFFFF, 0xB000, true);   
   }
   if (targetClk > 0) {
-      targetClk += 1; //fix for any rounding issues
-    double desiredDiv = vco/targetClk;
+    double desiredDiv = vco/(targetClk+1); // Handles rounding when user tries to set a "UI" clock
     // Adjust to be multiple of 0.125 (round up == closed without going over
     desiredDiv = ((double)((int)(desiredDiv * 8 + 0.99))) / 8.0;
     if (desiredDiv < 2.0) {
