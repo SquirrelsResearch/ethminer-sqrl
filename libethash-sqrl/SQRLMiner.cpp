@@ -1232,10 +1232,15 @@ void SQRLMiner::enumDevices(std::map<string, DeviceDescriptor>& _DevicesCollecti
 
         _DevicesCollection[uniqueId] = deviceDescriptor;
 
-        if (_settings.fkVCCINT.size() > numDevices) //fill empty space
-            _settings.fkVCCINT.push_back(0);
-        
-        if (_settings.jcVCCINT.size() > numDevices)  // fill empty space
-            _settings.jcVCCINT.push_back(0);
+        if (_settings.fkVCCINT.size() > 0)
+        {
+            if (_settings.fkVCCINT.size() > numDevices)  // fill empty space
+                _settings.fkVCCINT.push_back(_settings.fkVCCINT.at(0));
+        }
+        if (_settings.jcVCCINT.size() > 0)
+        {
+            if (_settings.jcVCCINT.size() > numDevices)  // fill empty space
+                _settings.jcVCCINT.push_back(_settings.jcVCCINT.at(0));
+        }
     }
 }
