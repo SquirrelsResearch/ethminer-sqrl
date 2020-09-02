@@ -272,11 +272,11 @@ bool SQRLMiner::initDevice()
 
       InitVoltageTbl();
 
-      m_settingID += format2decimal(m_settings.fkVCCINT.at(m_index));
-      m_settingID += format2decimal(m_settings.jcVCCINT.at(m_index));
+      m_settingID += format2decimal(m_settings.fkVCCINT);
+      m_settingID += format2decimal(m_settings.jcVCCINT);
 
      
-      setVoltage(m_settings.fkVCCINT.at(m_index), m_settings.jcVCCINT.at(m_index));
+      setVoltage(m_settings.fkVCCINT, m_settings.jcVCCINT);
      
 
       // Initialize clk
@@ -1260,16 +1260,5 @@ void SQRLMiner::enumDevices(std::map<string, DeviceDescriptor>& _DevicesCollecti
 	deviceDescriptor.targetClk = _settings.targetClk;
 
         _DevicesCollection[uniqueId] = deviceDescriptor;
-
-        if (_settings.fkVCCINT.size() > 0)
-        {
-            if (_settings.fkVCCINT.size() > numDevices)  // fill empty space
-                _settings.fkVCCINT.push_back(_settings.fkVCCINT.at(0));
-        }
-        if (_settings.jcVCCINT.size() > 0)
-        {
-            if (_settings.jcVCCINT.size() > numDevices)  // fill empty space
-                _settings.jcVCCINT.push_back(_settings.jcVCCINT.at(0));
-        }
     }
 }
