@@ -131,8 +131,8 @@ struct SQSettings : public MinerSettings
    unsigned patience = 1;
    bool skipStallDetection = 1;
    unsigned workDelay = 50000;
-   unsigned fkVCCINT;  // 0 == no action
-   unsigned jcVCCINT;  // 0 == no action
+   unsigned fkVCCINT = 0;  // 0 == no action
+   unsigned jcVCCINT = 0;  // 0 == no action
    bool dieOnError = false;
    unsigned dagMixers = 16;
    unsigned autoTune = 0;// 0 - no auto-tune, 1 - just reach max stable freq, 2 - downclock till low errror rate, 3 - tune intensity, 4- downclock voltage
