@@ -644,7 +644,7 @@ void SQRLMiner::kick_miner()
     if (!m_dagging) {
       // This can happen on odd thread
       // Stop mining if we are mining
-      //SQRLAXIWrite(m_axi, 0x0, 0x506c, false);
+      SQRLAXIWrite(m_axi, 0x0, 0x506c, false);
       // Immediately wake from any interrupts
       SQRLAXIKickInterrupts(m_axi);
     }
@@ -698,7 +698,7 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
     }
  
     // Esnure hashcore loads new, reset work
-    //err = SQRLAXIWrite(m_axi, 0x00000000, 0x506c, false);
+    err = SQRLAXIWrite(m_axi, 0x00000000, 0x506c, false);
     if (err != 0) {
       sqrllog << "Error stopping hashcore";
     }
@@ -852,7 +852,7 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
 	if (shouldReset) break; // Let core reset
     }
     // Ensure core is in reset
-    //SQRLAXIWrite(m_axi, 0x0, 0x506c, false);
+    SQRLAXIWrite(m_axi, 0x0, 0x506c, false);
     axiMutex.unlock();
 
 }
