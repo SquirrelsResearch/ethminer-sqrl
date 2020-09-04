@@ -224,6 +224,9 @@ bool SQRLMiner::initDevice()
     SQRLAXIRef axi = SQRLAXICreate(SQRLAXIConnectionTCP, (char *)m_deviceDescriptor.sqHost.c_str(), m_deviceDescriptor.sqPort);
     if (axi != NULL) {
       SQRLAXISetTimeout(axi, m_settings.axiTimeoutMs);
+      // Only affects interrupts from the multi-client bridge
+      // used for dual-mining
+      SQRLAXIEnableInterruptsWithMask(m_axi, 0x1);
       sqrllog << m_deviceDescriptor.name << " Connected";
       m_axi = axi;
 
@@ -641,7 +644,7 @@ void SQRLMiner::kick_miner()
     if (!m_dagging) {
       // This can happen on odd thread
       // Stop mining if we are mining
-      SQRLAXIWrite(m_axi, 0x0, 0x506c, false);
+      //SQRLAXIWrite(m_axi, 0x0, 0x506c, false);
       // Immediately wake from any interrupts
       SQRLAXIKickInterrupts(m_axi);
     }
@@ -695,7 +698,7 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
     }
  
     // Esnure hashcore loads new, reset work
-    err = SQRLAXIWrite(m_axi, 0x00000000, 0x506c, false);
+    //err = SQRLAXIWrite(m_axi, 0x00000000, 0x506c, false);
     if (err != 0) {
       sqrllog << "Error stopping hashcore";
     }
@@ -771,7 +774,7 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
         } else {
           // Modern, interrupt
 	  uint64_t interruptNonce;
-          SQRLAXIResult axiRes = SQRLAXIWaitForInterrupt(m_axi, 0, &interruptNonce,m_settings.workDelay/1000);  	
+          SQRLAXIResult axiRes = SQRLAXIWaitForInterrupt(m_axi, (1<<0), &interruptNonce,m_settings.workDelay/1000);  	
 	  if (axiRes == SQRLAXIResultOK) {
             nonceValid[0] = true;
 	    nonce[0] = interruptNonce;  
@@ -849,7 +852,7 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
 	if (shouldReset) break; // Let core reset
     }
     // Ensure core is in reset
-    SQRLAXIWrite(m_axi, 0x0, 0x506c, false);
+    //SQRLAXIWrite(m_axi, 0x0, 0x506c, false);
     axiMutex.unlock();
 
 }

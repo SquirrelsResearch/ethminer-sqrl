@@ -188,7 +188,7 @@ void * _SQRLAXIWorkThread(void * ctx) {
 	            uint8_t interrupts = (waitPkt[0] >> 4);
 		    bool unhandled = false;
 		    for(int i=0; i < 4; i++) {
-                      if(interrupts & (1 << i)) {
+                      if((interrupts & i) == i) {
                         if(self->callbacks[i] == NULL) {
 		          unhandled = true;
 			} else {
@@ -951,6 +951,18 @@ SQRLAXIResult SQRLAXIRegisterForInterrupts(SQRLAXIRef self, uint8_t interrupt, S
   return SQRLAXIResultOK;
 }
 
+// Needed only for multi-client AXI Bridge
+SQRLAXIResult SQRLAXIEnableInterruptsWithMask(SQRLAXIRef self, uint8_t interruptMask) {
+  // Send a fire-and-forget transaction (Ignored by uart2axi IP, but processed by the multi-client AXI bridge)
+  if (self->fd == INVALID_SOCKET) return SQRLAXIResultNotConnected;
+
+  // Do the transaction
+  uint8_t reqPkt[16];
+  _SQRLAXIMakePacket(reqPkt, 0x02, self->seq++, (uint64_t)interruptMask << 56ULL, 0x0);
+  SQRLAXIResult res = _SQRLAXIDoTransaction(self, reqPkt, NULL);
+  return res;
+}
+
 // Block for interrupt (with optional timeout)
 SQRLAXIResult SQRLAXIWaitForInterrupt(SQRLAXIRef self, uint8_t interrupt, uint64_t * interruptData, uint32_t timeoutInMs) {
   if (interrupt > 4) return SQRLAXIResultInvalidParam;
@@ -974,7 +986,7 @@ SQRLAXIResult SQRLAXIWaitForInterrupt(SQRLAXIRef self, uint8_t interrupt, uint64
 			      (((uint64_t)self->iPkts[ptr].rawResp[7]) << 16ULL) |
 			      (((uint64_t)self->iPkts[ptr].rawResp[8]) << 8ULL) |
 			      (((uint64_t)self->iPkts[ptr].rawResp[9]) << 0ULL);
-	  found = ((self->iPkts[ptr].rawResp[0] & (1 << (interrupt+4))) != 0);
+	  found = (((self->iPkts[ptr].rawResp[0] >> 4) & interrupt) != interrupt);
 	}
 	if ((ptr == self->iPktRd) || ((self->iPkts[ptr].respValid == 0) && self->iPkts[ptr].respTimedOut)) {
           self->iPktRd++;

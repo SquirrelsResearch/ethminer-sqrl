@@ -61,8 +61,13 @@ SQRLAXIResult SQRLAXICDMAWriteBytes(SQRLAXIRef self, uint8_t *buffer, uint32_t l
 SQRLAXIResult SQRLAXICDMAReadBytes(SQRLAXIRef self, uint8_t *buffer, uint32_t len, uint64_t srcAddr);
 SQRLAXIResult SQRLAXICDMACopyBytes(SQRLAXIRef self, uint64_t srcAddr, uint64_t destAddr, uint64_t len);
 
+// NOTE - All interrupts calls - "interrupt" represents an exact representation of 
+// the four interrupt bits that must be met. Interrupt0 == 0x1, interrupt0+1 == 0x3 etc.
 // Register a callback for interrupts (Disables internal interrupt queue)
 SQRLAXIResult SQRLAXIRegisterForInterrupts(SQRLAXIRef self, uint8_t interrupt, SQRLAXIInterruptCallback callback, void * context); 
+
+// Needed only for multi-client AXI Bridge
+SQRLAXIResult SQRLAXIEnableInterruptsWithMask(SQRLAXIRef self, uint8_t interruptMask);
 
 // Block for interrupt (with optional timeout)
 SQRLAXIResult SQRLAXIWaitForInterrupt(SQRLAXIRef self, uint8_t interrupt, uint64_t * interruptData, uint32_t timeoutInMs);
