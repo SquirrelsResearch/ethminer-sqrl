@@ -80,6 +80,7 @@ private:
 	double LookupVID(uint8_t VID);
     double getClock();
     double setClock(double targetClk);
+    SQRLAXIResult StopHashcore(bool soft);
 
     atomic<double> m_lastClk = {0};
     SQRLAXIRef m_axi = NULL;

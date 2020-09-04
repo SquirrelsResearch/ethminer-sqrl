@@ -212,6 +212,33 @@ double SQRLMiner::LookupVID(uint8_t VID)
 	return(SQRLMiner::VoltageTbl[VID]);
 }
 
+SQRLAXIResult SQRLMiner::StopHashcore(bool soft)
+{
+    // Stop the hashcore, optionally using a gradual
+    // intensity ramp-down to minimize voltage spikes
+    // - UART speed is 1 Mbps axi is 100 MHz
+    // - UART message is 16 bytes, 160 wire bits
+    // - Each wire bit is 1 microsecond, minimum 160us per step
+    // - PMIC response time is > 40us - we can fire these as
+    // - fast as we want 
+    if (soft) {
+      uint32_t dbg;
+      SQRLAXIResult err = SQRLAXIRead(m_axi, &dbg, 0x5080);
+      if (err == SQRLAXIResultOK) {
+        int inn = (dbg >> 24) & 0xFF; 
+        while(inn) {
+          dbg = (dbg & 0x00FFFFFF) | (inn << 24);
+  	  SQRLAXIWrite(m_axi, dbg, 0x5080, false);
+        } 
+      } else {
+        sqrllog << EthRed << "Error gracefully reseting core";
+      }
+      return SQRLAXIWrite(m_axi, 0x0, 0x506c, false);
+    } else {
+      return SQRLAXIWrite(m_axi, 0x0, 0x506c, false);
+    }
+}
+
 bool SQRLMiner::initDevice()
 {
     DEV_BUILD_LOG_PROGRAMFLOW(sqrllog, "sq-" << m_index << " SQRLMiner::initDevice begin");
@@ -296,10 +323,24 @@ bool SQRLMiner::initDevice()
         SQRLAXIWrite(m_axi, 0x100|(0x4d<<1), 0xA108, false); // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia) 	
         SQRLAXIWrite(m_axi, 0xD0, 0xA108, false); // Transmit FIFO byte 2 (SingleShotPage+Cmd)
         SQRLAXIWrite(m_axi, 0x04, 0xA108, false); // Transmit FIFO byte 3 (Write)
+        SQRLAXIWrite(m_axi, 0x22, 0xA108, false); // Transmit FIFO byte 4 (AddrLo (CMD)	
+        SQRLAXIWrite(m_axi, 0x08, 0xA108, false); // Transmit FIFO byte 2, VCCBRAM loop PID 
+        SQRLAXIWrite(m_axi, 0x1C , 0xA108, false); // Transmit FIFO byte 3 // new param lo
+        SQRLAXIWrite(m_axi, 0x200 | 0x5C, 0xA108, false); // Transmit FIFO byte 4 // new param hi (With Stop)
+        SQRLAXIWrite(m_axi, 0x1, 0xA100, false); // Send IIC transaction 	
+#ifdef _WIN32
+	Sleep(1000);
+#else
+        usleep(1000000);
+#endif
+        SQRLAXIWrite(m_axi, 0xA, 0xA040, false); // Soft Reset IIC 	
+        SQRLAXIWrite(m_axi, 0x100|(0x4d<<1), 0xA108, false); // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia) 	
+        SQRLAXIWrite(m_axi, 0xD0, 0xA108, false); // Transmit FIFO byte 2 (SingleShotPage+Cmd)
+        SQRLAXIWrite(m_axi, 0x04, 0xA108, false); // Transmit FIFO byte 3 (Write)
         SQRLAXIWrite(m_axi, 0x24, 0xA108, false); // Transmit FIFO byte 4 (AddrLo (CMD)	
         SQRLAXIWrite(m_axi, 0x08, 0xA108, false); // Transmit FIFO byte 2, VCCBRAM loop PID 
         SQRLAXIWrite(m_axi, 0x22 , 0xA108, false); // Transmit FIFO byte 3 // new param lo
-        SQRLAXIWrite(m_axi, 0x200 | 0x30, 0xA108, false); // Transmit FIFO byte 4 // new param hi (With Stop)
+        SQRLAXIWrite(m_axi, 0x200 | 0x2C, 0xA108, false); // Transmit FIFO byte 4 // new param hi (With Stop)
         SQRLAXIWrite(m_axi, 0x1, 0xA100, false); // Send IIC transaction 	
 #ifdef _WIN32
 	Sleep(1000);
@@ -396,7 +437,7 @@ bool SQRLMiner::initEpoch_internal()
     axiMutex.lock();
     sqrllog << "Changing to Epoch " << m_epochContext.epochNumber; 
     // Stop the mining core if it is active, and stop DAGGEN if active
-    SQRLAXIWrite(m_axi, 0x0, 0x506c, true);
+    StopHashcore(true);
     // Ensure DAGGEN is powered on
     SQRLAXIWrite(m_axi, 0xFFFFFFFF, 0xB000, true);
     // Stop DAGGEN
@@ -644,7 +685,7 @@ void SQRLMiner::kick_miner()
     if (!m_dagging) {
       // This can happen on odd thread
       // Stop mining if we are mining
-      SQRLAXIWrite(m_axi, 0x0, 0x506c, false);
+      StopHashcore(true);
       // Immediately wake from any interrupts
       SQRLAXIKickInterrupts(m_axi);
     }
@@ -698,7 +739,7 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
     }
  
     // Esnure hashcore loads new, reset work
-    err = SQRLAXIWrite(m_axi, 0x00000000, 0x506c, false);
+    err = StopHashcore(true);
     if (err != 0) {
       sqrllog << "Error stopping hashcore";
     }
@@ -852,7 +893,7 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
 	if (shouldReset) break; // Let core reset
     }
     // Ensure core is in reset
-    SQRLAXIWrite(m_axi, 0x0, 0x506c, false);
+    StopHashcore(true);
     axiMutex.unlock();
 
 }
@@ -1388,7 +1429,8 @@ void SQRLMiner::getTelemetry(unsigned int *tempC, unsigned int *fanprct, unsigne
 
   if (leftCatastrophic | rightCatastrophic | !leftCalibrated | !rightCalibrated) {
     // Power down all cores
-    SQRLAXIWrite(m_axi, 0x0, 0x506c, true);
+    StopHashcore(true);
+    // Power down daggen
     SQRLAXIWrite(m_axi, 0x0, 0xB000, true);
     // Forces a stall
     if (leftCatastrophic | rightCatastrophic) {
