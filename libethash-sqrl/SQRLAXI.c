@@ -958,7 +958,7 @@ SQRLAXIResult SQRLAXIEnableInterruptsWithMask(SQRLAXIRef self, uint8_t interrupt
 
   // Do the transaction
   uint8_t reqPkt[16];
-  _SQRLAXIMakePacket(reqPkt, 0x02, self->seq++, (uint64_t)interruptMask << 56ULL, 0x0);
+  _SQRLAXIMakePacket(reqPkt, 0xFF, self->seq++, (uint64_t)interruptMask << 56ULL, 0x0);
   SQRLAXIResult res = _SQRLAXIDoTransaction(self, reqPkt, NULL);
   return res;
 }
@@ -986,7 +986,7 @@ SQRLAXIResult SQRLAXIWaitForInterrupt(SQRLAXIRef self, uint8_t interrupt, uint64
 			      (((uint64_t)self->iPkts[ptr].rawResp[7]) << 16ULL) |
 			      (((uint64_t)self->iPkts[ptr].rawResp[8]) << 8ULL) |
 			      (((uint64_t)self->iPkts[ptr].rawResp[9]) << 0ULL);
-	  found = (((self->iPkts[ptr].rawResp[0] >> 4) & interrupt) != interrupt);
+	  found = (((self->iPkts[ptr].rawResp[0] >> 4) & interrupt) == interrupt);
 	}
 	if ((ptr == self->iPktRd) || ((self->iPkts[ptr].respValid == 0) && self->iPkts[ptr].respTimedOut)) {
           self->iPktRd++;

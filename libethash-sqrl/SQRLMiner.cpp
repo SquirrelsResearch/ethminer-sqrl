@@ -226,7 +226,7 @@ bool SQRLMiner::initDevice()
       SQRLAXISetTimeout(axi, m_settings.axiTimeoutMs);
       // Only affects interrupts from the multi-client bridge
       // used for dual-mining
-      SQRLAXIEnableInterruptsWithMask(m_axi, 0x1);
+      SQRLAXIEnableInterruptsWithMask(axi, 0x1);
       sqrllog << m_deviceDescriptor.name << " Connected";
       m_axi = axi;
 
