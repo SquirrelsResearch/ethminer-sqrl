@@ -107,18 +107,14 @@ unsigned SQRLMiner::getNumDevices(SQSettings _settings)
 
 /* ######################## CPU Miner ######################## */
 
-struct SQRLChannel : public LogChannel
-{
-    static const char* name() { return EthOrange "sq"; }
-    static const int verbosity = 2;
-};
-#define sqrllog clog(SQRLChannel)
+
 
 
 SQRLMiner::SQRLMiner(unsigned _index, SQSettings _settings, DeviceDescriptor& _device, TelemetryType* telemetry)
-  : Miner("sqrl-", _index), m_settings(_settings), _telemetry(telemetry)
+  : Miner("sqrl-", _index), m_settings(_settings)
 {
     m_deviceDescriptor = _device;
+    m_tuner = new AutoTuner(this, telemetry);
 }
 
 
@@ -134,6 +130,8 @@ SQRLMiner::~SQRLMiner()
       sqrllog << "Disconnecting " << m_deviceDescriptor.name;
       SQRLAXIDestroy(&m_axi);
     }
+    if (m_tuner != NULL)
+        delete m_tuner;
 }
 
 // Full formula (VID being a voltage ID from 0 - 255, inclusive):
@@ -264,6 +262,8 @@ bool SQRLMiner::initDevice()
       sqrllog << m_deviceDescriptor.name << " Connected";
       m_axi = axi;
 
+     
+
       // Critical Data
       uint32_t dnaLo,dnaMid,dnaHi;
       err = SQRLAXIRead(m_axi, &dnaLo, 0x1000);
@@ -284,6 +284,7 @@ bool SQRLMiner::initDevice()
       std::stringstream s;
       s << setfill('0') << setw(8) << std::hex << dnaLo << std::hex << dnaMid << std::hex << dnaHi;
       sqrllog << "DNA: " << s.str();
+      m_settingID += s.str() + "_";
 
       uint32_t device, bitstream;
       err = SQRLAXIRead(m_axi, &device, 0x0);
@@ -304,91 +305,15 @@ bool SQRLMiner::initDevice()
       s.clear();
       s << setfill('0') << setw(8) << std::hex << bitstream;
       sqrllog << "Bitstream: " << s.str();
+      m_settingID += s.str() + "_";
 
       InitVoltageTbl();
 
-      // Set voltage if asked
-      if (m_settings.fkVCCINT > 500)
-      {
-		uint32_t tmv;
-		uint8_t tWiper = FindClosestVIDToVoltage(((double)m_settings.fkVCCINT / 1000.0));
-		tmv = (uint32_t)(LookupVID(tWiper) * 1000.0);
-	 
-		sqrllog << "Found wiper code " << to_string(tWiper) << " for voltage " << to_string(tmv) << "mV.\n";
-	    
-        sqrllog << "Instructing FK VRM, if present, to target " << m_settings.fkVCCINT << "mv";
-        sqrllog << "Closest Viable Voltage " << tmv << "mv";
-        SQRLAXIWrite(m_axi, 0xA, 0x9040, false); 	
-        SQRLAXIWrite(m_axi, 0x158, 0x9108, false); 	
-        SQRLAXIWrite(m_axi, 0x00, 0x9108, false); 	
-        SQRLAXIWrite(m_axi, 0x200 | tWiper, 0x9108, false); 	
-        SQRLAXIWrite(m_axi, 0x1, 0x9100, false); 	
-      }
-      if (m_settings.jcVCCINT > 500) {
-        sqrllog << "Applying JCM PMIC Hot Fix";
-        SQRLAXIWrite(m_axi, 0xA, 0xA040, false); // Soft Reset IIC 	
-        SQRLAXIWrite(m_axi, 0x100|(0x4d<<1), 0xA108, false); // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia) 	
-        SQRLAXIWrite(m_axi, 0xD0, 0xA108, false); // Transmit FIFO byte 2 (SingleShotPage+Cmd)
-        SQRLAXIWrite(m_axi, 0x04, 0xA108, false); // Transmit FIFO byte 3 (Write)
-        SQRLAXIWrite(m_axi, 0x22, 0xA108, false); // Transmit FIFO byte 4 (AddrLo (CMD)	
-        SQRLAXIWrite(m_axi, 0x08, 0xA108, false); // Transmit FIFO byte 2, VCCBRAM loop PID 
-        SQRLAXIWrite(m_axi, 0x1C , 0xA108, false); // Transmit FIFO byte 3 // new param lo
-        SQRLAXIWrite(m_axi, 0x200 | 0x5C, 0xA108, false); // Transmit FIFO byte 4 // new param hi (With Stop)
-        SQRLAXIWrite(m_axi, 0x100|(0x4d<<1), 0xA108, false); // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia) 	
-        SQRLAXIWrite(m_axi, 0xD0, 0xA108, false); // Transmit FIFO byte 2 (SingleShotPage+Cmd)
-        SQRLAXIWrite(m_axi, 0x04, 0xA108, false); // Transmit FIFO byte 3 (Write)
-        SQRLAXIWrite(m_axi, 0x24, 0xA108, false); // Transmit FIFO byte 4 (AddrLo (CMD)	
-        SQRLAXIWrite(m_axi, 0x08, 0xA108, false); // Transmit FIFO byte 2, VCCBRAM loop PID 
-        SQRLAXIWrite(m_axi, 0x22 , 0xA108, false); // Transmit FIFO byte 3 // new param lo
-        SQRLAXIWrite(m_axi, 0x200 | 0x2C, 0xA108, false); // Transmit FIFO byte 4 // new param hi (With Stop)
-        SQRLAXIWrite(m_axi, 0x1, 0xA100, false); // Send IIC transaction 	
-#ifdef _WIN32
-	Sleep(1000);
-#else
-        usleep(1000000);
-#endif
-        SQRLAXIWrite(m_axi, 0xA, 0xA040, false); // Soft Reset IIC 	
-        SQRLAXIWrite(m_axi, 0x100|(0x4d<<1), 0xA108, false); // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia) 	
-        SQRLAXIWrite(m_axi, 0xD0, 0xA108, false); // Transmit FIFO byte 2 (SingleShotPage+Cmd)
-        SQRLAXIWrite(m_axi, 0x04, 0xA108, false); // Transmit FIFO byte 3 (Write)
-        SQRLAXIWrite(m_axi, 0xAA, 0xA108, false); // Transmit FIFO byte 4 (AddrLo (CMD)	
-        SQRLAXIWrite(m_axi, 0x0A, 0xA108, false); // Transmit FIFO byte 2, VCCBRAM_OV_FAULT 
-        SQRLAXIWrite(m_axi, 0xf3 , 0xA108, false); // Transmit FIFO byte 3 // vEnc[0]
-        SQRLAXIWrite(m_axi, 0x200 | 0xe0, 0xA108, false); // Transmit FIFO byte 4 // vEnc[1] (With Stop)
-        SQRLAXIWrite(m_axi, 0x1, 0xA100, false); // Send IIC transaction 	
-#ifdef _WIN32
-	Sleep(1000);
-#else
-        usleep(1000000);
-#endif
-        SQRLAXIWrite(m_axi, 0xA, 0xA040, false); // Soft Reset IIC 	
-        SQRLAXIWrite(m_axi, 0x100|(0x4d<<1), 0xA108, false); // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia) 	
-        SQRLAXIWrite(m_axi, 0xD0, 0xA108, false); // Transmit FIFO byte 2 (SingleShotPage+Cmd)
-        SQRLAXIWrite(m_axi, 0x04, 0xA108, false); // Transmit FIFO byte 3 (Write)
-        SQRLAXIWrite(m_axi, 0xAA, 0xA108, false); // Transmit FIFO byte 4 (AddrLo (CMD)	
-        SQRLAXIWrite(m_axi, 0x06, 0xA108, false); // Transmit FIFO byte 2, VCCINT OV_FAULT 
-        SQRLAXIWrite(m_axi, 0xf3 , 0xA108, false); // Transmit FIFO byte 3 // vEnc[0]
-        SQRLAXIWrite(m_axi, 0x200 | 0xe0, 0xA108, false); // Transmit FIFO byte 4 // vEnc[1] (With Stop)
-        SQRLAXIWrite(m_axi, 0x1, 0xA100, false); // Send IIC transaction 	
-
-        sqrllog << "Asking JCM VRM, if present, to target " << m_settings.jcVCCINT << "mv";
-
-#ifdef _WIN32
-	Sleep(1000);
-#else
-        usleep(1000000);
-#endif
-        uint16_t vEnc = (uint16_t)(((double)m_settings.jcVCCINT/1000.0) * 256.0);
-        SQRLAXIWrite(m_axi, 0xA, 0xA040, false); // Soft Reset IIC 	
-        SQRLAXIWrite(m_axi, 0x100|(0x4d<<1), 0xA108, false); // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia) 	
-        SQRLAXIWrite(m_axi, 0xD0, 0xA108, false); // Transmit FIFO byte 2 (SingleShotPage+Cmd)
-        SQRLAXIWrite(m_axi, 0x04, 0xA108, false); // Transmit FIFO byte 3 (Write)
-        SQRLAXIWrite(m_axi, (0x21 << 1), 0xA108, false); // Transmit FIFO byte 4 (AddrLo (CMD)	
-        SQRLAXIWrite(m_axi, 0x06, 0xA108, false); // Transmit FIFO byte 2, VOUT CMD 
-        SQRLAXIWrite(m_axi, 0x0 | (vEnc & 0xFF), 0xA108, false); // Transmit FIFO byte 3 // vEnc[0]
-        SQRLAXIWrite(m_axi, 0x200 | ((vEnc >> 8) & 0xFF), 0xA108, false); // Transmit FIFO byte 4 // vEnc[1] (With Stop)
-        SQRLAXIWrite(m_axi, 0x1, 0xA100, false); // Send IIC transaction 	
-      }
+      m_settingID += format2decimal(m_settings.fkVCCINT);
+      m_settingID += format2decimal(m_settings.jcVCCINT);
+   
+      setVoltage(m_settings.fkVCCINT, m_settings.jcVCCINT);
+     
 
       // Initialize clk
       sqrllog << "Stock Clock: " << setClock(-2);
@@ -399,12 +324,26 @@ bool SQRLMiner::initDevice()
       } else {
         m_lastClk = getClock();
       }
+
+      sqrllog << "TuneID=" << m_settingID;
+      if (boost::filesystem::exists(m_settings.tuneFile) && m_settings.autoTune > 0)
+      {
+          bool tuneFound = m_tuner->readSavedTunes(m_settings.tuneFile, m_settingID);
+
+          if (tuneFound)
+            m_settings.autoTune = 0; //if tune file exists, apply the tune and disable auto-tuning
+      }
+      
+
+
       // Print the settings
       sqrllog << "WorkDelay: " << m_settings.workDelay;
       sqrllog << "Patience: " << m_settings.patience;
       sqrllog << "IntensityN: " << m_settings.intensityN;
       sqrllog << "IntensityD: " << m_settings.intensityD;
       sqrllog << "SkipStallDetect: " << m_settings.skipStallDetection;
+
+      
     } else {
       sqrllog << m_deviceDescriptor.name << " Failed to Connect";
       m_axi = NULL;
@@ -414,8 +353,122 @@ bool SQRLMiner::initDevice()
     return (m_axi != 0);
 }
 
+    void SQRLMiner::setVoltage(unsigned fkVCCINT, unsigned jcVCCINT)
+{
+    unsigned upperVoltLimit = 920;
+    unsigned lowerVoltLimit = 500;
 
-/*
+    if (fkVCCINT != 0)
+    {
+        if (fkVCCINT <= lowerVoltLimit || fkVCCINT > upperVoltLimit)
+            sqrllog << EthRed << "Asking to set fkVCCINT out of bounds! [" << lowerVoltLimit << "-"
+                    << upperVoltLimit << "]";
+
+        else  // Set voltage if asked
+        {
+            uint32_t tmv;
+            uint8_t tWiper = FindClosestVIDToVoltage(((double)fkVCCINT / 1000.0));
+            tmv = (uint32_t)(LookupVID(tWiper) * 1000.0);
+
+            sqrllog << "Found wiper code " << to_string(tWiper) << " for voltage " << to_string(tmv)
+                    << "mV.\n";
+
+            sqrllog << "Instructing FK VRM, if present, to target " << fkVCCINT << "mv";
+            sqrllog << "Closest Viable Voltage " << tmv << "mv";
+            SQRLAXIWrite(m_axi, 0xA, 0x9040, false);
+            SQRLAXIWrite(m_axi, 0x158, 0x9108, false);
+            SQRLAXIWrite(m_axi, 0x00, 0x9108, false);
+            SQRLAXIWrite(m_axi, 0x200 | tWiper, 0x9108, false);
+            SQRLAXIWrite(m_axi, 0x1, 0x9100, false);
+        }
+    }
+    if (jcVCCINT != 0)
+    {
+        if (jcVCCINT <= lowerVoltLimit || jcVCCINT > upperVoltLimit)
+            sqrllog << EthRed << "Asking to set jcVCCINT out of bounds! [" << lowerVoltLimit << "-"
+                    << upperVoltLimit << "]";
+
+        else  // Set voltage if asked
+        {
+            sqrllog << "Applying JCM PMIC Hot Fix";
+            SQRLAXIWrite(m_axi, 0xA, 0xA040, false); // Soft Reset IIC 	
+            SQRLAXIWrite(m_axi, 0x100|(0x4d<<1), 0xA108, false); // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia) 	
+            SQRLAXIWrite(m_axi, 0xD0, 0xA108, false); // Transmit FIFO byte 2 (SingleShotPage+Cmd)
+            SQRLAXIWrite(m_axi, 0x04, 0xA108, false); // Transmit FIFO byte 3 (Write)
+            SQRLAXIWrite(m_axi, 0x22, 0xA108, false); // Transmit FIFO byte 4 (AddrLo (CMD)	
+            SQRLAXIWrite(m_axi, 0x08, 0xA108, false); // Transmit FIFO byte 2, VCCBRAM loop PID 
+            SQRLAXIWrite(m_axi, 0x1C , 0xA108, false); // Transmit FIFO byte 3 // new param lo
+            SQRLAXIWrite(m_axi, 0x200 | 0x5C, 0xA108, false); // Transmit FIFO byte 4 // new param hi (With Stop)
+            SQRLAXIWrite(m_axi, 0x100|(0x4d<<1), 0xA108, false); // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia) 	
+            SQRLAXIWrite(m_axi, 0xD0, 0xA108, false); // Transmit FIFO byte 2 (SingleShotPage+Cmd)
+            SQRLAXIWrite(m_axi, 0x04, 0xA108, false); // Transmit FIFO byte 3 (Write)
+            SQRLAXIWrite(m_axi, 0x24, 0xA108, false); // Transmit FIFO byte 4 (AddrLo (CMD)	
+            SQRLAXIWrite(m_axi, 0x08, 0xA108, false); // Transmit FIFO byte 2, VCCBRAM loop PID 
+            SQRLAXIWrite(m_axi, 0x22 , 0xA108, false); // Transmit FIFO byte 3 // new param lo
+            SQRLAXIWrite(m_axi, 0x200 | 0x2C, 0xA108, false); // Transmit FIFO byte 4 // new param hi (With Stop)
+            SQRLAXIWrite(m_axi, 0x1, 0xA100, false); // Send IIC transaction 	
+#ifdef _WIN32
+            Sleep(1000);
+#else
+            usleep(1000000);
+#endif
+            SQRLAXIWrite(m_axi, 0xA, 0xA040, false);  // Soft Reset IIC
+            SQRLAXIWrite(m_axi, 0x100 | (0x4d << 1), 0xA108,
+                false);  // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia)
+            SQRLAXIWrite(m_axi, 0xD0, 0xA108, false);  // Transmit FIFO byte 2
+                                                       // (SingleShotPage+Cmd)
+            SQRLAXIWrite(m_axi, 0x04, 0xA108, false);  // Transmit FIFO byte 3 (Write)
+            SQRLAXIWrite(m_axi, 0xAA, 0xA108, false);  // Transmit FIFO byte 4 (AddrLo (CMD)
+            SQRLAXIWrite(m_axi, 0x0A, 0xA108, false);  // Transmit FIFO byte 2, VCCBRAM_OV_FAULT
+            SQRLAXIWrite(m_axi, 0xf3, 0xA108, false);  // Transmit FIFO byte 3 // vEnc[0]
+            SQRLAXIWrite(m_axi, 0x200 | 0xe0, 0xA108, false);  // Transmit FIFO byte 4 //
+                                                               // vEnc[1] (With Stop)
+            SQRLAXIWrite(m_axi, 0x1, 0xA100, false);           // Send IIC transaction
+#ifdef _WIN32
+            Sleep(1000);
+#else
+            usleep(1000000);
+#endif
+            SQRLAXIWrite(m_axi, 0xA, 0xA040, false);  // Soft Reset IIC
+            SQRLAXIWrite(m_axi, 0x100 | (0x4d << 1), 0xA108,
+                false);  // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia)
+            SQRLAXIWrite(m_axi, 0xD0, 0xA108, false);  // Transmit FIFO byte 2
+                                                       // (SingleShotPage+Cmd)
+            SQRLAXIWrite(m_axi, 0x04, 0xA108, false);  // Transmit FIFO byte 3 (Write)
+            SQRLAXIWrite(m_axi, 0xAA, 0xA108, false);  // Transmit FIFO byte 4 (AddrLo (CMD)
+            SQRLAXIWrite(m_axi, 0x06, 0xA108, false);  // Transmit FIFO byte 2, VCCINT OV_FAULT
+            SQRLAXIWrite(m_axi, 0xf3, 0xA108, false);  // Transmit FIFO byte 3 // vEnc[0]
+            SQRLAXIWrite(m_axi, 0x200 | 0xe0, 0xA108, false);  // Transmit FIFO byte 4 //
+                                                               // vEnc[1] (With Stop)
+            SQRLAXIWrite(m_axi, 0x1, 0xA100, false);           // Send IIC transaction
+
+            sqrllog << "Asking JCM VRM, if present, to target " << jcVCCINT << "mv";
+
+#ifdef _WIN32
+            Sleep(1000);
+#else
+            usleep(1000000);
+#endif
+            uint16_t vEnc = (uint16_t)(((double)jcVCCINT / 1000.0) * 256.0);
+            SQRLAXIWrite(m_axi, 0xA, 0xA040, false);  // Soft Reset IIC
+            SQRLAXIWrite(m_axi, 0x100 | (0x4d << 1), 0xA108,
+                false);  // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia)
+            SQRLAXIWrite(m_axi, 0xD0, 0xA108, false);         // Transmit FIFO byte 2
+                                                              // (SingleShotPage+Cmd)
+            SQRLAXIWrite(m_axi, 0x04, 0xA108, false);         // Transmit FIFO byte 3 (Write)
+            SQRLAXIWrite(m_axi, (0x21 << 1), 0xA108, false);  // Transmit FIFO byte 4 (AddrLo
+                                                              // (CMD)
+            SQRLAXIWrite(m_axi, 0x06, 0xA108, false);         // Transmit FIFO byte 2, VOUT CMD
+            SQRLAXIWrite(m_axi, 0x0 | (vEnc & 0xFF), 0xA108, false);  // Transmit FIFO byte 3 //
+                                                                      // vEnc[0]
+            SQRLAXIWrite(m_axi, 0x200 | ((vEnc >> 8) & 0xFF), 0xA108,
+                false);                               // Transmit FIFO byte 4 // vEnc[1] (With Stop)
+            SQRLAXIWrite(m_axi, 0x1, 0xA100, false);  // Send IIC transaction
+        }
+    }
+}
+
+    /*
  * A new epoch was receifed with last work package (called from Miner::initEpoch())
  *
  * If we get here it means epoch has changed so it's not necessary
@@ -473,10 +526,7 @@ bool SQRLMiner::initEpoch_internal()
 	axiMutex.unlock();
 	setClock(m_lastClk);
 
-    m_intensitySettings.patience = m_settings.patience;
-    m_intensitySettings.intensityD = m_settings.intensityD;
-    m_intensitySettings.intensityN = m_settings.intensityN;
-    m_lastTuneTime = std::chrono::steady_clock::now();
+    m_tuner->startTune(m_lastClk);
 
 	return true;
       }
@@ -662,10 +712,7 @@ bool SQRLMiner::initEpoch_internal()
 
     axiMutex.unlock();
 
-    m_intensitySettings.patience = m_settings.patience;
-    m_intensitySettings.intensityD = m_settings.intensityD;
-    m_intensitySettings.intensityN = m_settings.intensityN;
-    m_lastTuneTime = std::chrono::steady_clock::now();
+    m_tuner->startTune(m_lastClk);
 
     return true;
 }
@@ -722,14 +769,23 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
     if (err != 0) sqrllog << "Failed setting ethcore nonceStartLow";
 
     uint32_t flags = 0;
-    if (m_intensitySettings.patience != 0)
+    auto intensSet = m_tuner->getIntensitySettings();
+
+    if (intensSet.isSet()) //if some other settings are available as part of tuning
     {
-        flags |= (1 << 6) | ((m_intensitySettings.patience & 0xff) << 8); 
+        m_settings.patience = intensSet.patience;
+        m_settings.intensityD = intensSet.intensityD;
+        m_settings.intensityN = intensSet.intensityN;
     }
-    if (m_intensitySettings.intensityN != 0)
+
+    if (m_settings.patience != 0)
     {
-        flags |= (1 << 0) | ((m_intensitySettings.intensityN & 0xFF) << 24);
-        flags |= (((m_intensitySettings.intensityD & 0x3F) * 8 - 1) << 16);
+        flags |= (1 << 6) | ((m_settings.patience & 0xff) << 8); 
+    }
+    if (m_settings.intensityN != 0)
+    {
+        flags |= (1 << 0) | ((m_settings.intensityN & 0xFF) << 24);
+        flags |= (((m_settings.intensityD & 0x3F) * 8 - 1) << 16);
     }
     err = SQRLAXIWrite(m_axi, flags, 0x5080, false);
     if (err != 0) {
@@ -886,8 +942,8 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
         // Update the hash rate
         updateHashRate(1, newTChks);
 
-        if (m_settings.autoTune > 0)
-            autoTune(newTChks);
+        //Auto tune and temperature check
+        m_tuner->tune(newTChks);
        
         //For hashrate averages
         processHashrateAverages(newTChks);
@@ -900,369 +956,48 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
     axiMutex.unlock();
 
 }
-void SQRLMiner::processHashrateAverages(uint64_t newTcks) {
+void SQRLMiner::processHashrateAverages(uint64_t newTcks)
+{
     m_hashCounter += newTcks;
 
-     auto elapsedSeconds = std::chrono::duration_cast<std::chrono::seconds>(
-        std::chrono::steady_clock::now() - (timePoint)m_avgHashTimer)
-                              .count();
-
-        if (elapsedSeconds > 60)
-        {
-            double avg1min = (m_hashCounter / 60) / pow(10, 6);
-            float errorRate = getHardwareErrorRate() * 100;
-
-            if (avg1min > 10 && avg1min < 100) //check for flukes
-            {
-                m_10minHashAvg.push_back(avg1min);
-                m_60minHashAvg.push_back(avg1min);
-            }
-            if (m_10minHashAvg.size() > 10)
-                m_10minHashAvg.erase(m_10minHashAvg.begin());  // pop front
-
-            if (m_60minHashAvg.size() > 60)
-                m_60minHashAvg.erase(m_60minHashAvg.begin());  // pop front
-
-            double avg10min = average(m_10minHashAvg);
-            double avg60min = average(m_60minHashAvg);
-
-            m_avgValues[0] = avg1min;
-            m_avgValues[1] = avg10min;
-            m_avgValues[2] = avg60min;
-            m_avgValues[3] = errorRate;
-
-            m_avgHashTimer = std::chrono::steady_clock::now();
-            m_hashCounter = 0;
-        }
-    
-}
-    /*
-1. Move frequency up until 0 target checks or invalids, then back off one tick (inc 0.125 on divider)
-2. Start with ~60%, increase intensity or binary search until you find the local maxima. Do this with patience 1
-3. Set patience up by 1, search +/- 2/3 inn values for a new local maxima
-4. Repeat until patience makes it worse
-*/
-void SQRLMiner::autoTune(uint64_t newTcks)
-{
-    m_tuneHashCounter += newTcks;
-
-     if (std::find(m_settings.exclude.begin(), m_settings.exclude.end(), m_index) !=
-        m_settings.exclude.end())  // if FPGA is excluded from tuning - don't bother
-        return;
-
-
-    //Stage 1:
-    int stage1_averageSeconds = 60;
-    float stabilityThreshold = 20;  // mhs
-    
-    //Stage 2:
-    float errorRateThreshold = 0.03;  // 3%
-    int tuningShareCount = m_settings.tuneTime;  // how many low shares to check to derive average from
-
-    //Stage 3:
-    int stage3_averageSeconds = m_settings.tuneTime;
-    
-    
-
-    float hash = RetrieveHashRate();
-    float mhs = hash / pow(10, 6);
-    auto it = std::find(_freqSteps.begin(), _freqSteps.end(), m_lastClk);
-    unsigned currentStepIndex = std::distance(_freqSteps.begin(), it);
 
     auto elapsedSeconds = std::chrono::duration_cast<std::chrono::seconds>(
-        std::chrono::steady_clock::now() - (timePoint)m_lastTuneTime).count();
+        std::chrono::steady_clock::now() - (std::chrono::steady_clock::time_point)m_avgHashTimer)
+                              .count();
 
-   
-    if (m_settings.autoTune >= 1 && !m_stableFreqFound)  // Stage 1: Do a quick tune to get max frequency
+    if (elapsedSeconds > 60)
     {
-        if (elapsedSeconds > stage1_averageSeconds)
+        double avg1min = (m_hashCounter / 60) / pow(10, 6);
+        float errorRate = m_tuner->getHardwareErrorRate() * 100;
+
+        if (avg1min > 10 && avg1min < 100)  // check for flukes
         {
-            if (it == _freqSteps.end())
-            {
-                sqrllog << EthOrange << "S1: Could not find starting index, stopping...";
-                return;
-            }
-
-            if (mhs > stabilityThreshold)  // assume above threshold mhs -> stable, can try higher
-                                           // clock
-            {
-                if (!m_maxFreqReached)
-                {
-                    if (currentStepIndex != _freqSteps.size() - 1)  // not getting out of bounds
-                    {
-                        int nextClock =
-                            _freqSteps[currentStepIndex + 1] + 1;  //+1 for precision issues
-                        sqrllog << EthOrange<< "S1: Stable at " << m_lastClk << "MHz, trying " << nextClock - 1 << "...";
-                        setClock(nextClock);
-                        m_lastClk = nextClock - 1;
-                    }
-                    else
-                    {
-                        sqrllog << EthOrange<< "Clocking out of bounds, max frequency reached!";
-                        m_maxFreqReached = true;
-                    }
-                }
-            }
-            else  // Unstable, downclock...
-            {
-                m_maxFreqReached = true;
-                if (currentStepIndex > 0)
-                {
-                    int nextClock = _freqSteps[currentStepIndex - 1] + 1;  //+1 for precision issues
-                    sqrllog << EthOrange <<"S1: Unstable at " << m_lastClk << "MHz, downclocking to "
-                            << nextClock - 1 << "...";
-                    setClock(nextClock);
-                    m_lastClk = nextClock - 1;
-
-                    clearSolutionStats();
-                }
-                else
-                    sqrllog << EthOrange<< "S1: Clocking out of bounds, min frequency reached!";
-            }
-
-
-            m_lastTuneTime = std::chrono::steady_clock::now();
+            m_10minHashAvg.push_back(avg1min);
+            m_60minHashAvg.push_back(avg1min);
         }
-    }
-    if (m_settings.autoTune >= 2)// Stage 2: Check for long term stability and error rate (removes marginally stable)
-    {
-        
-        if (m_maxFreqReached && !m_stableFreqFound)
-        {
-            // calculate error rate
-            SolutionAccountType solutions = getSolutions();
+        if (m_10minHashAvg.size() > 10)
+            m_10minHashAvg.erase(m_10minHashAvg.begin());  // pop front
 
-            if (solutions.low > 0 && (solutions.low+solutions.failed) % tuningShareCount == 0)
-            {
-                float errorRate = getHardwareErrorRate();
+        if (m_60minHashAvg.size() > 60)
+            m_60minHashAvg.erase(m_60minHashAvg.begin());  // pop front
 
-                if (errorRate > errorRateThreshold && currentStepIndex > 0)
-                {
-                    sqrllog << EthOrange<< "S2: Error rate of " << errorRate * 100 << "% above threshold (" << errorRateThreshold * 100 << "%), downclocking...";
-                    int nextClock = _freqSteps[currentStepIndex - 1] + 1;  //+1 for precision issues
-                    setClock(nextClock);
-                    m_lastClk = nextClock - 1;
+        double avg10min = average(m_10minHashAvg);
+        double avg60min = average(m_60minHashAvg);
 
-                    clearSolutionStats();
-                }
-                else
-                {
-                    sqrllog << EthOrange<< "S2: Stable long term frequency found at " << m_lastClk << "MHz";
-                    m_stableFreqFound = true;
-                }
-            }
-        }
-    }
+        m_avgValues[0] = avg1min;
+        m_avgValues[1] = avg10min;
+        m_avgValues[2] = avg60min;
+        m_avgValues[3] = errorRate;
 
-    if (m_settings.autoTune >= 3 && !m_intensityTuneFinished)   
-    {       
-       
-
-            if (m_stableFreqFound)
-        {
-            if (!m_intensityTuning)  // init
-            {
-                float targetThroughput = _throughputTargets[m_firstPassIndex];
-                m_intensitySettings.patience = m_settings.patience;  // start with user defined
-                m_intensitySettings.intensityD = 8;
-                m_intensitySettings.intensityN =
-                    (int)((m_intensitySettings.intensityD * targetThroughput) /
-                          (-targetThroughput + 1));  // derive inital N from 60% throughput.
-
-                clearSolutionStats();
-                m_intensityTuning = true;
-                sqrllog << EthOrange << "S3: Intensity tuning started... init settings ->"
-                        << m_intensitySettings.to_string();
-
-                m_lastTuneTime = std::chrono::steady_clock::now();
-            }
-            else
-            {
-                if (elapsedSeconds > stage3_averageSeconds)
-                {
-                    float errorRate = getHardwareErrorRate();
-
-                    float throughput =
-                        (float)m_intensitySettings.intensityN /
-                        (m_intensitySettings.intensityN + m_intensitySettings.intensityD);
-
-                    pair<IntensitySettings, double> p;
-
-                    double adjustedHash =
-                        (m_tuneHashCounter / stage3_averageSeconds) * (1 - errorRate);
-                    p = std::make_pair(m_intensitySettings, adjustedHash);  // penalize for
-                                                                            // producing errors
-
-                    if (m_bestSettingsSoFar.second < adjustedHash)
-                        m_bestSettingsSoFar = p;
-
-                    m_shareTimes.push_back(p);
-                    sqrllog << EthOrange << "S3: [" << m_intensitySettings.to_string()
-                            << "] errorRate=" << errorRate * 100 << "% Hashrate=" << adjustedHash
-                            << " throughput=" << throughput * 100 << "%";
-
-
-                    if (!m_bestIntensityRangeFound)  // Stage 3.1: Tune intensity, find best range
-                    {
-                        if (m_secondPassLowerN == 0 && m_secondPassUpperN == 0)  // still first
-                                                                                 // coarse pass
-                        {
-                            m_firstPassIndex++;
-
-                            float targetThroughput = _throughputTargets[m_firstPassIndex];
-                            m_intensitySettings.intensityN =
-                                (int)((m_intensitySettings.intensityD * targetThroughput) /
-                                      (-targetThroughput + 1));
-
-                            if (m_firstPassIndex == _throughputTargets.size() - 1)
-                            {
-                                int bestIndex = findBestIntensitySoFar();
-                                sqrllog << EthOrange << "S3.0: First tuning pass complete, best ->"
-                                        << m_shareTimes[bestIndex].first.to_string() << " with "
-                                        << m_shareTimes[bestIndex].second / stage3_averageSeconds
-                                        << "hs";
-
-                                vector<double> averages(m_shareTimes.size() - 1);
-                                for (unsigned i = 0; i < m_shareTimes.size() - 1; i++)
-                                {
-                                    averages[i] =
-                                        (m_shareTimes[i].second + m_shareTimes[i + 1].second) / 2;
-                                }
-                                for (unsigned i = 0; i < m_shareTimes.size(); i++)
-                                {
-                                    sqrllog << EthOrange << i << "," << m_shareTimes[i].second;
-                                }
-                                // find best average to obtain the more fine tuning range
-                                int bestAvgIndex = 0;
-                                for (unsigned i = 1; i < averages.size(); i++)
-                                {
-                                    if (averages[i] > averages[bestAvgIndex])
-                                    {
-                                        bestAvgIndex = i;
-                                    }
-                                    sqrllog << EthOrange << "[" << i << "]avg=>" << averages[i];
-                                }
-                                m_secondPassLowerN = m_shareTimes[bestAvgIndex].first.intensityN;
-                                m_secondPassUpperN =
-                                    m_shareTimes[bestAvgIndex + 1].first.intensityN;
-
-                                uint8_t diff = m_secondPassUpperN - m_secondPassLowerN;
-                                int stepSize = diff / 5;
-                                if (stepSize <= 0)
-                                    stepSize = 1;
-                                m_secondPassStepSizeN = stepSize;
-
-                                sqrllog << EthOrange
-                                        << "S3.1: Starting fine tuning (second pass) of N, "
-                                           "within the "
-                                           "range ["
-                                        << (int)m_secondPassLowerN << "-" << (int)m_secondPassUpperN
-                                        << "]";
-
-                                m_shareTimes.clear();  // clear for the second pass
-                                m_intensitySettings.intensityN = m_secondPassLowerN;
-                            }
-                        }
-                        else  // second - fine pass of N
-                        {
-                            if (m_intensitySettings.intensityN <= m_secondPassUpperN)
-                            {
-                                m_intensitySettings.intensityN += m_secondPassStepSizeN;
-                            }
-                            else
-                            {
-                                sqrllog << EthOrange << "S3.1: Best setting so far ->"
-                                        << m_bestSettingsSoFar.first.to_string()
-                                        << " with hashrate=" << m_bestSettingsSoFar.second;
-                                m_bestIntensityRangeFound = true;
-                                m_shareTimes.clear();
-                                m_intensitySettings.patience++;
-                                m_intensitySettings.intensityN = m_secondPassLowerN;
-                            }
-                        }
-                    }
-                    else  // Stage 3.2 -> increase patience, retest
-                    {
-                        if (m_intensitySettings.intensityN <= m_secondPassUpperN)
-                        {
-                            m_intensitySettings.intensityN += m_secondPassStepSizeN;
-                        }
-                        else
-                        {
-                            if (m_bestSettingsSoFar.first.patience == m_intensitySettings.patience)
-                            {  // we got new best with increased patience, keep increasing...
-                                m_intensitySettings.patience++;
-                                sqrllog << EthOrange << "S3.2: Best setting so far ->"
-                                        << m_bestSettingsSoFar.first.to_string()
-                                        << " with hashrate=" << m_bestSettingsSoFar.second;
-                            }
-                            else
-                            {
-                                sqrllog << EthOrange
-                                        << "Intensitivity tuning finished! Best settings="
-                                        << m_bestSettingsSoFar.first.to_string()
-                                        << " with hashrate=" << m_bestSettingsSoFar.second;
-
-                                m_intensitySettings = m_bestSettingsSoFar.first;
-                                m_intensityTuneFinished = true;
-                            }
-                        }
-                    }
-                    sqrllog << EthBlueBold << "Average hashrate during tuning period="
-                            << (m_tuneHashCounter / stage3_averageSeconds) / pow(10, 6) << "MHs";
-                    m_lastTuneTime = std::chrono::steady_clock::now();
-                    clearSolutionStats();
-                    m_hashCounter = 0;  // reset overall average counters
-                }
-            }
-        }
+        m_avgHashTimer = std::chrono::steady_clock::now();
+        m_hashCounter = 0;
     }
 }
 double SQRLMiner::average(std::vector<double> const& v)
 {
     return std::accumulate(v.begin(), v.end(), 0.0) / v.size();
 }
-int SQRLMiner::findBestIntensitySoFar()
-{
-    int bestIndex = 0;
-    double bestTime = m_shareTimes[0].second;
-    for (unsigned i = 1; i < m_shareTimes.size(); i++)
-    {
-        double t = m_shareTimes[i].second;
-        if (t > bestTime)
-        {
-            bestIndex = i;
-            bestTime = t;
-          
-        }
-    }
-    return bestIndex;
-}
 
-void SQRLMiner::clearSolutionStats()
-{
-    _telemetry->miners.at(m_index).solutions.accepted = 0;
-    _telemetry->miners.at(m_index).solutions.failed = 0;
-    _telemetry->miners.at(m_index).solutions.low = 0;
-    _telemetry->miners.at(m_index).solutions.rejected = 0;
-    _telemetry->miners.at(m_index).solutions.wasted = 0;
-
-    m_tuneHashCounter = 0;
-}
-float SQRLMiner::getHardwareErrorRate()
-{
-    auto sol = getSolutions();
-    int allSolutions = sol.accepted + sol.failed + sol.low;
-    int failedSolutions = sol.failed;
-    if (allSolutions == 0)
-        return 0;
-
-    return failedSolutions / (float)allSolutions;
-}
-SolutionAccountType SQRLMiner::getSolutions()
-{
-    return _telemetry->miners.at(m_index).solutions;
-}
 double SQRLMiner::getClock() {
   return setClock(-1);
 }
@@ -1414,17 +1149,27 @@ void SQRLMiner::getTelemetry(unsigned int *tempC, unsigned int *fanprct, unsigne
 	    << (int)leftTemp << "C " 
     	    << (int)rightTemp << "C";
   }
-  float voltage = _telemetry->miners.at(m_index).sensors.powerW; //TODO: Check if can get directly from tempc%powerW
-  int temp = _telemetry->miners.at(m_index).sensors.tempC;
-  //Average hashrates
-  sqrllog << EthTeal << "sqrl-" << m_index << EthLime 
+  
+  float voltage = (*powerW) / 1000.0; 
+  int temp = (*tempC);
+
+  m_FPGAtemps[0] = temp;
+  m_FPGAtemps[1] = leftTemp;
+  m_FPGAtemps[2] = rightTemp;
+
+  uint8_t tunerStage = m_tuner->getTuningStage(); 
+  if (tunerStage > 0)  // still tuning
+      s << EthRed << " Tuning... S" << (int)tunerStage;
+  
+  //Average hashrate block
+  sqrllog << EthTeal << "sqrl-" << m_index << EthLime
           << " Avg 1m:" << format2decimal(m_avgValues[0])
-          << " 10m:" << format2decimal(m_avgValues[1]) 
-          << " 60m:" << format2decimal(m_avgValues[2]) << "Mhs" 
-          << EthPurple << " Err=" << format2decimal(m_avgValues[3]) 
-          << "% [" << m_intensitySettings.to_string() << "] "
-          << EthWhite << m_lastClk << "MHz " << format2decimal(voltage)
-          << "V " << temp << "C " << s.str();
+          << " 10m:" << format2decimal(m_avgValues[1]) << " 60m:" << format2decimal(m_avgValues[2])
+          << "Mhs" << EthPurple << " Err=" << format2decimal(m_avgValues[3])
+          << "% [P=" << m_settings.patience << " N=" << m_settings.intensityN
+          << " D=" << m_settings.intensityD << "] " << EthWhite << m_lastClk << "MHz "
+          << format2decimal(voltage) << "V " << temp << "C " << s.str();
+  
 
   if (leftCatastrophic | rightCatastrophic | !leftCalibrated | !rightCalibrated) {
     // Power down all cores

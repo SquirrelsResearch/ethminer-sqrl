@@ -362,17 +362,15 @@ public:
 
         app.add_option("--sqrl-hosts,--sq-hosts", m_SQSettings.hosts, "");
 	app.add_option("--sqrl-core-clk,--cclk", m_SQSettings.targetClk, "")->check(CLI::Range(50,600));
-    app.add_option("--auto-tune", m_SQSettings.autoTune, " 0 - no auto-tune, 1 - just reach max stable freq, 2 - downclock till low errror rate, 3 - tune intensity, 4- downclock voltage",true)->check(CLI::Range(0, 4));
-    app.add_option("--tune-time", m_SQSettings.tuneTime, " Tuning time per test in seconds",true)->check(CLI::Range(10, 10000000));
-    app.add_option("--tune-exclude", m_SQSettings.exclude, "Devices to exclude, space seperated", true);
-	app.add_option("--sqrl-intensity-n,--sqin", m_SQSettings.intensityN,"Numerator of SQRL Intensity (0-255) - 0 disables rate control(Not Recommended)", true)->check(CLI::Range(0,255));
+    app.add_option("--sqrl-intensity-n,--sqin", m_SQSettings.intensityN,"Numerator of SQRL Intensity (0-255) - 0 disables rate control(Not Recommended)", true)->check(CLI::Range(0,255));
 	app.add_option("--sqrl-intensity-d,--sqid", m_SQSettings.intensityD,"Denominator of SQRL Intensity (1-32)", true)->check(CLI::Range(1,32));
 	app.add_option("--sqrl-patience,--sqp", m_SQSettings.patience, "Cycles to wait for on-chip network congestion to resolve itself before intervention - 0 disables(Not Recommended)", true)->check(CLI::Range(0,255));
 	app.add_option("--sqrl-no-stalldetect", m_SQSettings.skipStallDetection,"",true);
 	app.add_option("--sqrl-work-delay", m_SQSettings.workDelay,"Time in microseconds to wait before updating work results", true)->check(CLI::Range(10000,1000000));
-	app.add_option("--sqrl-fk-vccint", m_SQSettings.fkVCCINT, "Voltage in millivolt to set FK VCCINT target to. Limit 0.75-0.90", true)->check(CLI::Range(0, 920));
-	app.add_option("--sqrl-jc-vccint", m_SQSettings.jcVCCINT, "Voltage in millivolt to set JC VCCINT target to. Limit 0.75-0.90", true)->check(CLI::Range(0, 920));
-        app.add_flag("--sqrl-die-on-error", m_SQSettings.dieOnError, "Exit immediately on comm errors");
+	app.add_option("--sqrl-fk-vccint", m_SQSettings.fkVCCINT, "Voltage in millivolt to set FK VCCINT target to. Limit 750-920", true)->check(CLI::Range(0, 920));
+	app.add_option("--sqrl-jc-vccint", m_SQSettings.jcVCCINT, "Voltage in millivolt to set JC VCCINT target to. Limit 750-920", true)->check(CLI::Range(0, 920));
+    app.add_flag("--sqrl-die-on-error", m_SQSettings.dieOnError, "Exit immediately on comm errors");
+        
 
 	app.add_option("--sqrl-dag-mixers", m_SQSettings.dagMixers, "Number of DAG mixers in the loaded bitstream (Rarely Used)", true)->check(CLI::Range(1,16));
 	app.add_option("--sqrl-hbm-stats", m_SQSettings.showHBMStats, "Show HBM Temperature/Calibration stats", true);
@@ -381,6 +379,16 @@ public:
 
 	// AXI Timeout control
 	app.add_option("--sqrl-axi-timeout", m_SQSettings.axiTimeoutMs, "AXI maximum latency in milliseconds", true);
+
+    //Tune
+    app.add_option("--auto-tune", m_SQSettings.autoTune, " 0 - no auto-tune, 1 - just reach max stable freq, 2 - downclock till low errror rate, 3 - tune intensity, 4- downclock voltage",true)->check(CLI::Range(0, 4));
+    app.add_option("--tune-time", m_SQSettings.tuneTime, " Tuning time per test in seconds",true)->check(CLI::Range(10, 10000000));
+    app.add_option("--tune-max-clk", m_SQSettings.tuneMaxClk, " Tuning will not got higher than this clk, Mhz",true)->check(CLI::Range(300, 600));
+    app.add_option("--tune-exclude", m_SQSettings.tuneExclude, "Devices to exclude, space seperated", true);
+    app.add_option("--tune-file", m_SQSettings.tuneFile, "File in the same directory containing tune files");
+    app.add_option("--tune-maxcore-temp", m_SQSettings.tuneMaxCoreTemp, "Max core temp, in C", true);
+    app.add_option("--tune-maxhbm-temp", m_SQSettings.tuneMaxHBMtemp, "Max HBM temp, in C", true);
+
 #ifdef _WIN32
 	WSADATA wsaData;
         WSAStartup(MAKEWORD(2,2), &wsaData);
