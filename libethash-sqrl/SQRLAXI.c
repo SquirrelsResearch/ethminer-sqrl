@@ -188,7 +188,7 @@ void * _SQRLAXIWorkThread(void * ctx) {
 	            uint8_t interrupts = (waitPkt[0] >> 4);
 		    bool unhandled = false;
 		    for(int i=0; i < 4; i++) {
-                      if(interrupts & (1 << i)) {
+                      if((interrupts & i) == i) {
                         if(self->callbacks[i] == NULL) {
 		          unhandled = true;
 			} else {
@@ -224,6 +224,7 @@ void * _SQRLAXIWorkThread(void * ctx) {
 		} else {
 		  // Lookup the packet in our queue...
 		  bool found = false;
+		  bool wake = false;
 		  SQRLMutexLock(&self->wMutex);
 		  for(uint8_t ptr = self->wPktRd; ptr != self->wPktWr; ptr++) {
                     if (((waitPkt[0] & 0xF) == self->workPkts[ptr].rawReq[0]) && (waitPkt[1] == self->workPkts[ptr].rawReq[1])) {
@@ -234,25 +235,31 @@ void * _SQRLAXIWorkThread(void * ctx) {
 	                  // Advance through any recieved packets
                           while((self->wPktRd != self->wPktWr) && (self->workPkts[self->wPktRd].respRcvd)) self->wPktRd++;
 	                }
+			found = true;
 		      } else {
 			memcpy(self->workPkts[ptr].rawResp, waitPkt, 16);
 			self->workPkts[ptr].respRcvd = 1;
 			self->workPkts[ptr].respValid = (crc == pcrc);
 			self->workPkts[ptr].respTimedOut = 0;
 	                found=true;
+			wake=true;
 		      }
                       break;
 		    } 
 		  }
 
 		  SQRLMutexUnlock(&self->wMutex);
-		  if (found) {
+		  if (wake) {
 		    // Alert callers
 #ifdef _WIN32
                     WakeAllConditionVariable(&self->wCond);
 #else
                     pthread_cond_broadcast(&self->wCond);
 #endif
+		  }
+		  if (!found) {
+		    // Normal for write-forget ACKs
+                    //printf("Orphaned Response!\n");
 		  }
 		}
 
@@ -300,17 +307,19 @@ SQRLAXIResult _SQRLAXIDoTransaction(SQRLAXIRef self, uint8_t * reqPkt, uint8_t *
     return SQRLAXIResultBusy;
   }
   // Place our work packet in the queue
-  memcpy(&(self->workPkts[self->wPktWr].rawReq), reqPkt, 16); 
-  memset(&(self->workPkts[self->wPktWr].rawResp), 0x0, 16);
-  self->workPkts[self->wPktWr].reqSent=1;
-  self->workPkts[self->wPktWr].respRcvd = (respPkt == NULL)?true:false; // Causes work loop to clear the packet on response
-  self->workPkts[self->wPktWr].respValid = 0;
-  self->workPkts[self->wPktWr].respTimedOut = 0;
-  pktSlot = self->wPktWr;
-  self->wPktWr++; // Auto-wrap to 
+  if (respPkt != NULL) {
+    memcpy(&(self->workPkts[self->wPktWr].rawReq), reqPkt, 16); 
+    memset(&(self->workPkts[self->wPktWr].rawResp), 0x0, 16);
+    self->workPkts[self->wPktWr].reqSent=1;
+    self->workPkts[self->wPktWr].respRcvd = (respPkt == NULL)?true:false; // Causes work loop to clear the packet on response
+    self->workPkts[self->wPktWr].respValid = 0;
+    self->workPkts[self->wPktWr].respTimedOut = 0;
+    pktSlot = self->wPktWr;
+    self->wPktWr++; // Auto-wrap
+  }
 
   // Send the full packet
-  //printf("Sending Packet %02hhx %02hhx\n", reqPkt[0], reqPkt[1]);
+  //printf("Sending Packet %02hhx %02hhx slot %02hhx\n", reqPkt[0], reqPkt[1], pktSlot);
   int bytesSent = 0;
   while (bytesSent < 16) {
     int sent = send(self->fd, reqPkt+bytesSent, (16-bytesSent), 0);
@@ -366,11 +375,11 @@ SQRLAXIResult _SQRLAXIDoTransaction(SQRLAXIRef self, uint8_t * reqPkt, uint8_t *
         SQRLMutexUnlock(&self->wMutex);
 	if (timedOut) return SQRLAXIResultTimedOut;
 	if (!valid) return SQRLAXIResultCRCFailed;
-	break;
+	return SQRLAXIResultOK;
       }
       SQRLMutexUnlock(&self->wMutex);
       if (timeoutCount == 0) {
-        printf("AXI Timeout Expired - Communications Error - %i ms\n", self->axiTimeoutMs);
+        printf("AXI Timeout Expired %02hhx %02hhx - Communications Error - %i ms\n", self->workPkts[pktSlot].rawReq[0], self->workPkts[pktSlot].rawReq[1], self->axiTimeoutMs);
 	SQRLMutexLock(&self->wMutex);
 	self->workPkts[pktSlot].respTimedOut = true;
 	self->workPkts[pktSlot].respRcvd = true;
@@ -951,6 +960,18 @@ SQRLAXIResult SQRLAXIRegisterForInterrupts(SQRLAXIRef self, uint8_t interrupt, S
   return SQRLAXIResultOK;
 }
 
+// Needed only for multi-client AXI Bridge
+SQRLAXIResult SQRLAXIEnableInterruptsWithMask(SQRLAXIRef self, uint8_t interruptMask) {
+  // Send a fire-and-forget transaction (Ignored by uart2axi IP, but processed by the multi-client AXI bridge)
+  if (self->fd == INVALID_SOCKET) return SQRLAXIResultNotConnected;
+
+  // Do the transaction
+  uint8_t reqPkt[16];
+  _SQRLAXIMakePacket(reqPkt, 0xFF, self->seq++, (uint64_t)interruptMask << 56ULL, 0x0);
+  SQRLAXIResult res = _SQRLAXIDoTransaction(self, reqPkt, NULL);
+  return res;
+}
+
 // Block for interrupt (with optional timeout)
 SQRLAXIResult SQRLAXIWaitForInterrupt(SQRLAXIRef self, uint8_t interrupt, uint64_t * interruptData, uint32_t timeoutInMs) {
   if (interrupt > 4) return SQRLAXIResultInvalidParam;
@@ -974,7 +995,7 @@ SQRLAXIResult SQRLAXIWaitForInterrupt(SQRLAXIRef self, uint8_t interrupt, uint64
 			      (((uint64_t)self->iPkts[ptr].rawResp[7]) << 16ULL) |
 			      (((uint64_t)self->iPkts[ptr].rawResp[8]) << 8ULL) |
 			      (((uint64_t)self->iPkts[ptr].rawResp[9]) << 0ULL);
-	  found = ((self->iPkts[ptr].rawResp[0] & (1 << (interrupt+4))) != 0);
+	  found = (((self->iPkts[ptr].rawResp[0] >> 4) & interrupt) == interrupt);
 	}
 	if ((ptr == self->iPktRd) || ((self->iPkts[ptr].respValid == 0) && self->iPkts[ptr].respTimedOut)) {
           self->iPktRd++;

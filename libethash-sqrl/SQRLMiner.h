@@ -95,6 +95,10 @@ private:
 	uint8_t FindClosestVIDToVoltage(double ReqVoltage);
 	double LookupVID(uint8_t VID);
 
+    double getClock();
+    double setClock(double targetClk);
+    SQRLAXIResult StopHashcore(bool soft);
+
     //Clock
     atomic<double> m_lastClk = {0};
 
