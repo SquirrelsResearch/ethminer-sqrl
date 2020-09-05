@@ -290,7 +290,7 @@ bool SQRLMiner::initDevice()
       err = SQRLAXIRead(m_axi, &device, 0x0);
       if (err != 0) {
         sqrllog << "Error reading device type";
-	device = 'unkn';
+	device = 0x756e6b6e;// 'unkn';
       } 
       err = SQRLAXIRead(m_axi, &bitstream, 0x8);
       if (err != 0) {
@@ -742,9 +742,10 @@ void SQRLMiner::kick_miner()
 
 void SQRLMiner::search(const dev::eth::WorkPackage& w)
 {
-    const auto& context = ethash::get_global_epoch_context(w.epoch);
-    const auto header = ethash::hash256_from_bytes(w.header.data());
-    const auto boundary = ethash::hash256_from_bytes(w.boundary.data());
+    // Left for reference
+    //const auto& context = ethash::get_global_epoch_context(w.epoch);
+    //const auto header = ethash::hash256_from_bytes(w.header.data());
+    //const auto boundary = ethash::hash256_from_bytes(w.boundary.data());
     auto nonce = w.startNonce;
 
     
@@ -959,6 +960,7 @@ void SQRLMiner::processHashrateAverages(uint64_t newTcks)
 {
     m_hashCounter += newTcks;
 
+
     auto elapsedSeconds = std::chrono::duration_cast<std::chrono::seconds>(
         std::chrono::steady_clock::now() - (std::chrono::steady_clock::time_point)m_avgHashTimer)
                               .count();
@@ -1126,11 +1128,9 @@ void SQRLMiner::getTelemetry(unsigned int *tempC, unsigned int *fanprct, unsigne
   }
 
   // Read the HBM stack control values
-  if(SQRLAXIResultOK != SQRLAXIRead(m_axi, &raw, 0x7008)) {
-    raw = 0;
-    // Force "calibrated" TODO
-    raw |= 0x3;
-  }
+  // Force "calibrated" if comms fail (Avoid cascaded errors)
+  raw = 0x3;
+  SQRLAXIRead(m_axi, &raw, 0x7008);
   axiMutex.unlock();
   // Left CAL, Right CL, Left CAT, Left 7 bit, Right CAT (Meow), Right 7bit 
   bool leftCalibrated = ((raw >> 0) & 1)?true:false;
