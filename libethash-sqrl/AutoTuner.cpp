@@ -49,7 +49,7 @@ void AutoTuner::tune(uint64_t newTcks)
     if (_settings->autoTune >= 2)  // Stage 2: Check for long term stability and error rate (removes
                                    // marginally stable)
     {
-        if (tuneStage2(elapsedSeconds, currentStepIndex))
+        if (tuneStage2(currentStepIndex))
             if (_settings->autoTune == 2)
                 tuningFinished = true;
     }
@@ -79,13 +79,13 @@ void AutoTuner::tune(uint64_t newTcks)
     }
 }
 void AutoTuner::tuneStage1(
-    uint64_t elapsedSeconds, int currentStepIndex, vector<int>::iterator it, float mhs)
+    uint64_t elapsedSeconds, unsigned currentStepIndex, vector<unsigned>::iterator it, float mhs)
 {
     if (_stableFreqFound)  // nothing to do...
         return;
 
     // Stage 1:
-    int stage1_averageSeconds = 60;
+    uint64_t stage1_averageSeconds = 60;
     float throughput =
         (float)_settings->intensityN / (_settings->intensityN + _settings->intensityD);
     float stabilityThreshold = ((_lastClock / 8) * throughput) * .9;
@@ -141,7 +141,7 @@ void AutoTuner::tuneStage1(
         _lastTuneTime = std::chrono::steady_clock::now();
     }
 }
-bool AutoTuner::tuneStage2(uint64_t elapsedSeconds, int currentStepIndex)
+bool AutoTuner::tuneStage2(unsigned currentStepIndex)
 {
     // Stage 2:
     float errorRateThreshold = 0.03;  // 3%
@@ -193,7 +193,7 @@ bool AutoTuner::tuneStage3(uint64_t elapsedSeconds)
         return false;
 
     // Stage 3:
-    int stage3_averageSeconds = _settings->tuneTime;
+    unsigned stage3_averageSeconds = _settings->tuneTime;
 
     if (_stableFreqFound)
     {
@@ -260,18 +260,18 @@ bool AutoTuner::tuneStage3(uint64_t elapsedSeconds)
                                     << "hs";
 
                             vector<double> averages(_shareTimes.size() - 1);
-                            for (int i = 0; i < _shareTimes.size() - 1; i++)
+                            for (unsigned i = 0; i < _shareTimes.size() - 1; i++)
                             {
                                 averages[i] =
                                     (_shareTimes[i].second + _shareTimes[i + 1].second) / 2;
                             }
-                            for (int i = 0; i < _shareTimes.size(); i++)
+                            for (unsigned i = 0; i < _shareTimes.size(); i++)
                             {
                                 sqrllog << EthOrange << i << "," << _shareTimes[i].second;
                             }
                             // find best average to obtain the more fine tuning range
                             int bestAvgIndex = 0;
-                            for (int i = 1; i < averages.size(); i++)
+                            for (unsigned i = 1; i < averages.size(); i++)
                             {
                                 if (averages[i] > averages[bestAvgIndex])
                                 {
@@ -354,7 +354,7 @@ int AutoTuner::findBestIntensitySoFar()
 {
     int bestIndex = 0;
     double bestTime = _shareTimes[0].second;
-    for (int i = 1; i < _shareTimes.size(); i++)
+    for (unsigned i = 1; i < _shareTimes.size(); i++)
     {
         double t = _shareTimes[i].second;
         if (t > bestTime)
@@ -438,7 +438,7 @@ bool AutoTuner::saveTune()
         return false;
     }
 }
-bool AutoTuner::temperatureSafetyCheck(int currentStepIndex)
+bool AutoTuner::temperatureSafetyCheck(unsigned currentStepIndex)
 {
     int maxCore = _settings->tuneMaxCoreTemp;
     int maxHBM = _settings->tuneMaxHBMtemp;

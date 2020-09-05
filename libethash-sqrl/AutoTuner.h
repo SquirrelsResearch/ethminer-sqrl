@@ -34,7 +34,7 @@ class AutoTuner
     TelemetryType* _telemetry = NULL;
     SQSettings* _settings = NULL;
     unsigned _minerIndex = 0;
-    vector<int> _freqSteps = {0, 100, 200, 246, 252, 259, 266, 274, 282, 290, 300, 309, 320, 331,
+    vector<unsigned> _freqSteps = {0, 100, 200, 246, 252, 259, 266, 274, 282, 290, 300, 309, 320, 331,
         342, 355, 369, 384, 400, 417, 436, 457, 480, 505, 533, 564, 600};
 
     vector<double> _throughputTargets = {0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.92};
@@ -63,13 +63,13 @@ class AutoTuner
     vector<pair<IntensitySettings, double>> _shareTimes;  // how many target checks in set time
     
 
-    void tuneStage1(uint64_t elapsedSeconds, int currentStepIndex, vector<int>::iterator it, float mhs);
-    bool tuneStage2(uint64_t elapsedSeconds, int currentStepIndex);
+    void tuneStage1(uint64_t elapsedSeconds, unsigned currentStepIndex, vector<unsigned>::iterator it, float mhs);
+    bool tuneStage2(unsigned currentStepIndex);
     bool tuneStage3(uint64_t elapsedSeconds);
     int findBestIntensitySoFar();
     void clearSolutionStats();
     bool saveTune();
-    bool temperatureSafetyCheck(int currentStepIndex);
+    bool temperatureSafetyCheck(unsigned currentStepIndex);
     
    
 

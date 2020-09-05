@@ -87,17 +87,14 @@ private:
     AutoTuner* m_tuner;
 
     void workLoop() override;
+    SQRLAXIResult StopHashcore(bool soft);
   
     //Voltages
-	double VoltageTbl[256] = { 0.0 };
+    double VoltageTbl[256] = { 0.0 };
 
-	void InitVoltageTbl(void);
-	uint8_t FindClosestVIDToVoltage(double ReqVoltage);
-	double LookupVID(uint8_t VID);
-
-    double getClock();
-    double setClock(double targetClk);
-    SQRLAXIResult StopHashcore(bool soft);
+    void InitVoltageTbl(void);
+    uint8_t FindClosestVIDToVoltage(double ReqVoltage);
+    double LookupVID(uint8_t VID);
 
     //Clock
     atomic<double> m_lastClk = {0};
