@@ -289,7 +289,7 @@ bool SQRLMiner::initDevice()
       err = SQRLAXIRead(m_axi, &device, 0x0);
       if (err != 0) {
         sqrllog << "Error reading device type";
-	device = 'unkn';
+	device = 0x756e6b6e;// 'unkn';
       } 
       err = SQRLAXIRead(m_axi, &bitstream, 0x8);
       if (err != 0) {
@@ -695,9 +695,10 @@ void SQRLMiner::kick_miner()
 
 void SQRLMiner::search(const dev::eth::WorkPackage& w)
 {
-    const auto& context = ethash::get_global_epoch_context(w.epoch);
-    const auto header = ethash::hash256_from_bytes(w.header.data());
-    const auto boundary = ethash::hash256_from_bytes(w.boundary.data());
+    // Left for reference
+    //const auto& context = ethash::get_global_epoch_context(w.epoch);
+    //const auto header = ethash::hash256_from_bytes(w.header.data());
+    //const auto boundary = ethash::hash256_from_bytes(w.boundary.data());
     auto nonce = w.startNonce;
 
     
@@ -966,7 +967,7 @@ void SQRLMiner::autoTune(uint64_t newTcks)
     float hash = RetrieveHashRate();
     float mhs = hash / pow(10, 6);
     auto it = std::find(_freqSteps.begin(), _freqSteps.end(), m_lastClk);
-    auto currentStepIndex = std::distance(_freqSteps.begin(), it);
+    unsigned currentStepIndex = std::distance(_freqSteps.begin(), it);
 
     auto elapsedSeconds = std::chrono::duration_cast<std::chrono::seconds>(
         std::chrono::steady_clock::now() - (timePoint)m_lastTuneTime).count();
@@ -1122,24 +1123,22 @@ void SQRLMiner::autoTune(uint64_t newTcks)
                                         << "hs";
 
                                 vector<double> averages(m_shareTimes.size() - 1);
-                                for (int i = 0; i < m_shareTimes.size() - 1; i++)
+                                for (unsigned i = 0; i < m_shareTimes.size() - 1; i++)
                                 {
                                     averages[i] =
                                         (m_shareTimes[i].second + m_shareTimes[i + 1].second) / 2;
                                 }
-                                for (int i = 0; i < m_shareTimes.size(); i++)
+                                for (unsigned i = 0; i < m_shareTimes.size(); i++)
                                 {
                                     sqrllog << EthOrange << i << "," << m_shareTimes[i].second;
                                 }
                                 // find best average to obtain the more fine tuning range
                                 int bestAvgIndex = 0;
-                                double bestAvg = averages[bestAvgIndex];
-                                for (int i = 1; i < averages.size(); i++)
+                                for (unsigned i = 1; i < averages.size(); i++)
                                 {
                                     if (averages[i] > averages[bestAvgIndex])
                                     {
                                         bestAvgIndex = i;
-                                        bestAvg = averages[i];
                                     }
                                     sqrllog << EthOrange << "[" << i << "]avg=>" << averages[i];
                                 }
@@ -1227,7 +1226,7 @@ int SQRLMiner::findBestIntensitySoFar()
 {
     int bestIndex = 0;
     double bestTime = m_shareTimes[0].second;
-    for (int i = 1; i < m_shareTimes.size(); i++)
+    for (unsigned i = 1; i < m_shareTimes.size(); i++)
     {
         double t = m_shareTimes[i].second;
         if (t > bestTime)
@@ -1394,11 +1393,9 @@ void SQRLMiner::getTelemetry(unsigned int *tempC, unsigned int *fanprct, unsigne
   }
 
   // Read the HBM stack control values
-  if(SQRLAXIResultOK != SQRLAXIRead(m_axi, &raw, 0x7008)) {
-    raw = 0;
-    // Force "calibrated" TODO
-    raw |= 0x3;
-  }
+  // Force "calibrated" if comms fail (Avoid cascaded errors)
+  raw = 0x3;
+  SQRLAXIRead(m_axi, &raw, 0x7008);
   axiMutex.unlock();
   // Left CAL, Right CL, Left CAT, Left 7 bit, Right CAT (Meow), Right 7bit 
   bool leftCalibrated = ((raw >> 0) & 1)?true:false;
