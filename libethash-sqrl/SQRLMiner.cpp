@@ -226,12 +226,19 @@ SQRLAXIResult SQRLMiner::StopHashcore(bool soft)
       SQRLAXIResult err = SQRLAXIRead(m_axi, &dbg, 0x5080);
       if (err == SQRLAXIResultOK) {
         int inn = (dbg >> 24) & 0xFF; 
-        while(inn) {
+	int step = ceil((double)inn / 8.0); 
+        while(inn > 0) {
           dbg = (dbg & 0x00FFFFFF) | (inn << 24);
+	  //printf("Dropping intensity to %i\n", inn);
   	  SQRLAXIWrite(m_axi, dbg, 0x5080, false);
+	  inn -= step;
         } 
+	if (inn != 0) {
+  	  SQRLAXIWrite(m_axi, dbg & 0x00FFFFFF, 0x5080, false);
+	}
+
       } else {
-        sqrllog << EthRed << "Error gracefully reseting core";
+        sqrllog << EthRed << "Error gracefully reseting core, using hard-reset";
       }
       return SQRLAXIWrite(m_axi, 0x0, 0x506c, false);
     } else {
@@ -327,13 +334,6 @@ bool SQRLMiner::initDevice()
         SQRLAXIWrite(m_axi, 0x08, 0xA108, false); // Transmit FIFO byte 2, VCCBRAM loop PID 
         SQRLAXIWrite(m_axi, 0x1C , 0xA108, false); // Transmit FIFO byte 3 // new param lo
         SQRLAXIWrite(m_axi, 0x200 | 0x5C, 0xA108, false); // Transmit FIFO byte 4 // new param hi (With Stop)
-        SQRLAXIWrite(m_axi, 0x1, 0xA100, false); // Send IIC transaction 	
-#ifdef _WIN32
-	Sleep(1000);
-#else
-        usleep(1000000);
-#endif
-        SQRLAXIWrite(m_axi, 0xA, 0xA040, false); // Soft Reset IIC 	
         SQRLAXIWrite(m_axi, 0x100|(0x4d<<1), 0xA108, false); // Transmit FIFO byte 1 (Write(startbit), Addr, Acadia) 	
         SQRLAXIWrite(m_axi, 0xD0, 0xA108, false); // Transmit FIFO byte 2 (SingleShotPage+Cmd)
         SQRLAXIWrite(m_axi, 0x04, 0xA108, false); // Transmit FIFO byte 3 (Write)
@@ -685,7 +685,7 @@ void SQRLMiner::kick_miner()
     if (!m_dagging) {
       // This can happen on odd thread
       // Stop mining if we are mining
-      StopHashcore(true);
+      //StopHashcore(true); - happens in search exit
       // Immediately wake from any interrupts
       SQRLAXIKickInterrupts(m_axi);
     }
@@ -739,10 +739,12 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
     }
  
     // Esnure hashcore loads new, reset work
-    err = StopHashcore(true);
-    if (err != 0) {
-      sqrllog << "Error stopping hashcore";
-    }
+    // Redundant, was stopped on exit or last time
+    //err = StopHashcore(true);
+    //if (err != 0) {
+    //  sqrllog << "Error stopping hashcore";
+    //} 
+    
     // Bit 0 = enable nonces via interrupt instead of polling
     SQRLAXIWrite(m_axi, 0x00010001, 0x506c, false);
     if (err != 0) {
