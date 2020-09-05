@@ -1035,7 +1035,7 @@ void SQRLMiner::autoTune(uint64_t newTcks)
             {
                 float errorRate = getHardwareErrorRate();
 
-                if (errorRate > errorRateThreshold)
+                if (errorRate > errorRateThreshold && currentStepIndex > 0)
                 {
                     sqrllog << EthOrange<< "S2: Error rate of " << errorRate * 100 << "% above threshold (" << errorRateThreshold * 100 << "%), downclocking...";
                     int nextClock = _freqSteps[currentStepIndex - 1] + 1;  //+1 for precision issues
