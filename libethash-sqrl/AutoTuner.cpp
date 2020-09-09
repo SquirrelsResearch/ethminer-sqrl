@@ -226,7 +226,7 @@ bool AutoTuner::tuneStage3(uint64_t elapsedSeconds)
 
                 pair<IntensitySettings, double> p;
 
-                double adjustedHash = (_tuneHashCounter / stage3_averageSeconds) * (1 - errorRate);
+                double adjustedHash = (_tuneHashCounter / elapsedSeconds) * (1 - errorRate);
                 p = std::make_pair(_intensitySettings, adjustedHash);  // penalize for
                                                                         // producing errors
 
