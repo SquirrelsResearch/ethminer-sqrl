@@ -936,7 +936,7 @@ void SQRLMiner::processHashrateAverages(uint64_t newTcks)
 
     if (elapsedSeconds > 60)
     {
-        double avg1min = (m_hashCounter / 60) / pow(10, 6);
+        double avg1min = (m_hashCounter / elapsedSeconds) / pow(10, 6);
         float errorRate = m_tuner->getHardwareErrorRate() * 100;
 
         if (avg1min > 10 && avg1min < 100)  // check for flukes
