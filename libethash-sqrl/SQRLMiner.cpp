@@ -210,7 +210,7 @@ double SQRLMiner::LookupVID(uint8_t VID)
 	return(SQRLMiner::VoltageTbl[VID]);
 }
 
-SQRLAXIResult SQRLMiner::StopHashcore(bool soft)
+SQRLAXIResult SQRLMiner::StopHashcore(bool soft, uint32_t dbgFlags)
 {
     // Stop the hashcore, optionally using a gradual
     // intensity ramp-down to minimize voltage spikes
@@ -221,7 +221,12 @@ SQRLAXIResult SQRLMiner::StopHashcore(bool soft)
     // - fast as we want 
     if (soft) {
       uint32_t dbg;
-      SQRLAXIResult err = SQRLAXIRead(m_axi, &dbg, 0x5080);
+      SQRLAXIResult err = SQRLAXIResultOK;
+      if (dbgFlags == 0) {
+        err = SQRLAXIRead(m_axi, &dbg, 0x5080);
+      } else {
+        dbg = dbgFlags;
+      }
       if (err == SQRLAXIResultOK) {
         int inn = (dbg >> 24) & 0xFF; 
 	int step = ceil((double)inn / 8.0); 
@@ -418,10 +423,10 @@ bool SQRLMiner::initDevice()
             SQRLAXIWrite(m_axi, 0xD0, 0xA108, false);  // Transmit FIFO byte 2
                                                        // (SingleShotPage+Cmd)
             SQRLAXIWrite(m_axi, 0x04, 0xA108, false);  // Transmit FIFO byte 3 (Write)
-            SQRLAXIWrite(m_axi, 0xAA, 0xA108, false);  // Transmit FIFO byte 4 (AddrLo (CMD)
-            SQRLAXIWrite(m_axi, 0x0A, 0xA108, false);  // Transmit FIFO byte 2, VCCBRAM_OV_FAULT
-            SQRLAXIWrite(m_axi, 0xf3, 0xA108, false);  // Transmit FIFO byte 3 // vEnc[0]
-            SQRLAXIWrite(m_axi, 0x200 | 0xe0, 0xA108, false);  // Transmit FIFO byte 4 //
+            SQRLAXIWrite(m_axi, 0x20, 0xA108, false);  // Transmit FIFO byte 4 (AddrLo (CMD)
+            SQRLAXIWrite(m_axi, 0x08, 0xA108, false);  // Transmit FIFO byte 2, VCCBRAM_OV_FAULT
+            SQRLAXIWrite(m_axi, 0x77, 0xA108, false);  // Transmit FIFO byte 3 // vEnc[0]
+            SQRLAXIWrite(m_axi, 0x200 | 0x00, 0xA108, false);  // Transmit FIFO byte 4 //
                                                                // vEnc[1] (With Stop)
             SQRLAXIWrite(m_axi, 0x1, 0xA100, false);           // Send IIC transaction
 #ifdef _WIN32
@@ -435,10 +440,10 @@ bool SQRLMiner::initDevice()
             SQRLAXIWrite(m_axi, 0xD0, 0xA108, false);  // Transmit FIFO byte 2
                                                        // (SingleShotPage+Cmd)
             SQRLAXIWrite(m_axi, 0x04, 0xA108, false);  // Transmit FIFO byte 3 (Write)
-            SQRLAXIWrite(m_axi, 0xAA, 0xA108, false);  // Transmit FIFO byte 4 (AddrLo (CMD)
-            SQRLAXIWrite(m_axi, 0x06, 0xA108, false);  // Transmit FIFO byte 2, VCCINT OV_FAULT
-            SQRLAXIWrite(m_axi, 0xf3, 0xA108, false);  // Transmit FIFO byte 3 // vEnc[0]
-            SQRLAXIWrite(m_axi, 0x200 | 0xe0, 0xA108, false);  // Transmit FIFO byte 4 //
+            SQRLAXIWrite(m_axi, 0x80, 0xA108, false);  // Transmit FIFO byte 4 (AddrLo (CMD)
+            SQRLAXIWrite(m_axi, 0x0A, 0xA108, false);  // Transmit FIFO byte 2, VCCBRAM OV_FAULT
+            SQRLAXIWrite(m_axi, 0x00, 0xA108, false);  // Transmit FIFO byte 3 // vEnc[0]
+            SQRLAXIWrite(m_axi, 0x200 | 0x01, 0xA108, false);  // Transmit FIFO byte 4 //
                                                                // vEnc[1] (With Stop)
             SQRLAXIWrite(m_axi, 0x1, 0xA100, false);           // Send IIC transaction
 
@@ -490,7 +495,7 @@ bool SQRLMiner::initEpoch_internal()
     axiMutex.lock();
     sqrllog << "Changing to Epoch " << m_epochContext.epochNumber; 
     // Stop the mining core if it is active, and stop DAGGEN if active
-    StopHashcore(true);
+    StopHashcore(true, 0);
     // Ensure DAGGEN is powered on
     SQRLAXIWrite(m_axi, 0xFFFFFFFF, 0xB000, true);
     // Stop DAGGEN
@@ -755,12 +760,20 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
     // Re-init parameters 
     axiMutex.lock();
     uint8_t err = 0;
-    err = SQRLAXIWriteBulk(m_axi, (uint8_t *)w.header.data(), 32, 0x5000, 1); 
-    if (err != 0) sqrllog << "Failed setting ethcore header";
+    // Bulk writes are blocking, we'll spend the bandwidth for lower latency
+    //err = SQRLAXIWriteBulk(m_axi, (uint8_t *)w.header.data(), 32, 0x5000, 1); 
+    for(int i=0; i < 32; i+= 4) {
+      err = SQRLAXIWrite(m_axi, htonl(((uint32_t *)w.header.data())[i/4]),0x5000+i, false);  
+      if (err != 0) sqrllog << "Failed setting ethcore header";
+    }
     auto falseTarget = h256("0x0000001fffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
     if (w.boundary > falseTarget) falseTarget = w.boundary;
-    err = SQRLAXIWriteBulk(m_axi, (uint8_t*)falseTarget.data(), 32, 0x5020, 1);
-    if (err != 0) sqrllog << "Failed setting ethcore target";
+    // Bulk writes are blocking, we'll spend the bandwidth for lower latency
+    //err = SQRLAXIWriteBulk(m_axi, (uint8_t*)falseTarget.data(), 32, 0x5020, 1);
+    for(int i=0; i < 32; i+= 4) {
+      err = SQRLAXIWrite(m_axi, htonl(((uint32_t *)falseTarget.data())[i/4]),0x5020+i, false);  
+      if (err != 0) sqrllog << "Failed setting ethcore target";
+    }
     uint32_t nonceStartHigh = nonce >> 32;
     uint32_t nonceStartLow = nonce & 0xFFFFFFFF;
     err = SQRLAXIWrite(m_axi, nonceStartHigh, 0x5068, false);
@@ -824,71 +837,25 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
 	//   auto r = ethash::search(context, header, boundary, nonce, blocksize);
 	axiMutex.unlock();
 
-	bool nonceValid[4] = {false,false,false,false};
-	uint64_t nonce[4] = {0,0,0,0};
+	bool nonceValid = false;
+	uint64_t nonce = 0;
 
-	if (0/*Legacy Mode*/) {
-	  // LEGACY - polling based
-#ifdef _WIN32
-	  Sleep(m_settings.workDelay/1000); // Give a momment for solutions
-#else
-	  usleep(m_settings.workDelay); // Give a momment for solutions
-#endif
-	  axiMutex.lock();
-
-	  uint32_t value = 0;
-	  uint32_t nonceLo,nonceHi;
-	  err = SQRLAXIRead(m_axi, &value, 0x506c);
-          if (err != 0) {
-            sqrllog << "Failed checking nonceFlags";
-	    value = 0;
+        // Modern, interrupt
+	uint64_t interruptNonce;
+        SQRLAXIResult axiRes = SQRLAXIWaitForInterrupt(m_axi, (1<<0), &interruptNonce,m_settings.workDelay/1000);  	
+	if (axiRes == SQRLAXIResultOK) {
+          nonceValid = true;
+	  nonce = interruptNonce;  
+	} else if (axiRes == SQRLAXIResultTimedOut) {
+          // Normal
+	  nonceValid = false;
+	} else {
+	  sqrllog << EthRed << "FPGA Interrupt Error";
+	  if(m_settings.dieOnError) {
+            exit(1);
 	  }
-    	  if ((value >> 15) & 0x1) {
-            nonceValid[0] = true;
-	    SQRLAXIRead(m_axi, &nonceHi, 0x5000+19*4);
-	    SQRLAXIRead(m_axi, &nonceLo, 0x5000+28*4);
-	    nonce[0] = ((((uint64_t)nonceHi) << 32ULL) | (uint64_t)nonceLo);
- 	  } else nonceValid[0] = false;
-	  if ((value >> 14) & 0x1) {
-            nonceValid[1] = true;
-	    SQRLAXIRead(m_axi, &nonceHi, 0x5000+20*4);
-	    SQRLAXIRead(m_axi, &nonceLo, 0x5000+29*4);
-	    nonce[1] = ((((uint64_t)nonceHi) << 32ULL) | (uint64_t)nonceLo);
-	  } else nonceValid[1] = false;
-	  if ((value >> 13) & 0x1) {
-            nonceValid[2] = true;
-	    SQRLAXIRead(m_axi, &nonceHi, 0x5000+21*4);
-	    SQRLAXIRead(m_axi, &nonceLo, 0x5000+30*4);
-	    nonce[2] = ((((uint64_t)nonceHi) << 32ULL) | (uint64_t)nonceLo);
-	  } else nonceValid[2] = false;
-	  if ((value >> 12) & 0x1) {
-            nonceValid[3] = true;
-	    SQRLAXIRead(m_axi, &nonceHi, 0x5000+22*4);
-	    SQRLAXIRead(m_axi, &nonceLo, 0x5000+31*4);
-	    nonce[3] = ((((uint64_t)nonceHi) << 32ULL) | (uint64_t)nonceLo);
-	  } else nonceValid[3] = false;
-	  // Clear nonces if needed
-	  if (nonceValid[0] || nonceValid[1] || nonceValid[2] || nonceValid[3]) {
-	    SQRLAXIWrite(m_axi, 0x00010000, 0x506c, false);
- 	  }
-        } else {
-          // Modern, interrupt
-	  uint64_t interruptNonce;
-          SQRLAXIResult axiRes = SQRLAXIWaitForInterrupt(m_axi, (1<<0), &interruptNonce,m_settings.workDelay/1000);  	
-	  if (axiRes == SQRLAXIResultOK) {
-            nonceValid[0] = true;
-	    nonce[0] = interruptNonce;  
-	  } else if (axiRes == SQRLAXIResultTimedOut) {
-            // Normal
-	    nonceValid[0] = false;
-	  } else {
-	    sqrllog << EthRed << "FPGA Interrupt Error";
-	    if(m_settings.dieOnError) {
-              exit(1);
-	    }
-  	  }
-	  axiMutex.lock();
-	}
+  	}
+        axiMutex.lock();
 
         // Get stall check parameters
 	uint32_t sCnt;
@@ -905,17 +872,21 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
           sqrllog << "Error reading target check counter";
 	  tChkLo = 0;
 	} 
+	// Job time < 60 seconds, save the read
+	/*
 	err = SQRLAXIRead(m_axi, &tChkHi, 0x5044);
         if (err != 0) {
           sqrllog << "Error reading target check counter";
 	  tChkHi = 0;
 	} 
+	*/
+	tChkHi = 0;
 	uint64_t tChks = ((uint64_t)tChkHi << 32) + tChkLo;
 
 	uint64_t newTChks = 0;
 	if (!((tChkLo == 0) && (tChkHi == 0))) {
 	  if (tChks < lastTChecks) {
-            tChkHi++; // Cheap rollover detection
+            tChkHi = (lastTChecks >> 32) + 1; // Cheap rollover detection
 	    tChks = ((uint64_t)tChkHi << 32) + tChkLo;
 	  }
 	  newTChks = tChks - lastTChecks;
@@ -929,14 +900,12 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
 	}
 	lastSCnt = sCnt;
 
-	for (int i=0; i < 4; i++) {
-          if (nonceValid[i]) {
-            auto sol = Solution{nonce[i], h256(0), w, std::chrono::steady_clock::now(), m_index};
- 
-            sqrllog << EthWhite << "Job: " << w.header.abridged()
-                 << " Sol: " << toHex(sol.nonce, HexPrefix::Add) << EthReset;
-            Farm::f().submitProof(sol);
-	  }
+        if (nonceValid) {
+          auto sol = Solution{nonce, h256(0), w, std::chrono::steady_clock::now(), m_index};
+
+          sqrllog << EthWhite << "Job: " << w.header.abridged()
+               << " Sol: " << toHex(sol.nonce, HexPrefix::Add) << EthReset;
+          Farm::f().submitProof(sol);
 	}
    
         // Update the hash rate
@@ -952,7 +921,7 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
 	if (shouldReset) break; // Let core reset
     }
     // Ensure core is in reset
-    StopHashcore(true);
+    StopHashcore(true, flags);
     axiMutex.unlock();
 
 }
@@ -1173,7 +1142,7 @@ void SQRLMiner::getTelemetry(unsigned int *tempC, unsigned int *fanprct, unsigne
 
   if (leftCatastrophic | rightCatastrophic | !leftCalibrated | !rightCalibrated) {
     // Power down all cores
-    StopHashcore(true);
+    StopHashcore(true, 0);
     // Power down daggen
     SQRLAXIWrite(m_axi, 0x0, 0xB000, true);
     // Forces a stall

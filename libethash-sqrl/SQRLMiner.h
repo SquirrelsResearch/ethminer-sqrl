@@ -87,7 +87,7 @@ private:
     AutoTuner* m_tuner;
 
     void workLoop() override;
-    SQRLAXIResult StopHashcore(bool soft);
+    SQRLAXIResult StopHashcore(bool soft, uint32_t dbgFlags);
   
     //Voltages
     double VoltageTbl[256] = { 0.0 };

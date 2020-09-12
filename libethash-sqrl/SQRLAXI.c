@@ -59,6 +59,11 @@
 #define sqrlsocklen_t socklen_t
 #endif
 
+//#define LATENCY_BENCHMARK
+#ifdef LATENCY_BENCHMARK
+#include <time.h>
+#endif
+
 typedef struct {
   uint8_t rawReq[16];
   uint8_t rawResp[16];
@@ -66,7 +71,11 @@ typedef struct {
   bool respRcvd;
   bool respValid;
   bool respTimedOut;
+  struct timespec reqTime;
+  struct timespec respTime;
 } SQRLAXIPkt;
+
+static uint64_t last10Times[10] = {0,0,0,0,0,0,0,0,0,0};
 
 typedef struct _SQRLAXI {
   SQRLAXIConnectionType type;
@@ -184,6 +193,8 @@ void * _SQRLAXIWorkThread(void * ctx) {
 		    // TODO - for now, just clear the interrupt queue entirely if it is being ignored 
 		    self->iPktWr = 0;
 		    self->iPktRd = 0;
+		  } if ((waitPkt[0] >> 4) != 0x1) {
+		    // temporary hack, supress dual-mining interrupts	  
 		  } else {
 	            uint8_t interrupts = (waitPkt[0] >> 4);
 		    bool unhandled = false;
@@ -237,6 +248,29 @@ void * _SQRLAXIWorkThread(void * ctx) {
 	                }
 			found = true;
 		      } else {
+#ifdef LATENCY_BENCHMARK
+			clock_gettime(0, &(self->workPkts[ptr].respTime));
+			struct timespec lhs,rhs;
+			lhs = self->workPkts[ptr].respTime;
+			rhs = self->workPkts[ptr].reqTime;
+                        uint64_t sec;
+                        uint64_t nsec;
+
+                        if (lhs.tv_nsec < rhs.tv_nsec) {
+                          sec = lhs.tv_sec - rhs.tv_sec - 1;
+                          nsec = 1000000000LL + lhs.tv_nsec - rhs.tv_nsec;
+                        } else {
+                          sec = lhs.tv_sec - rhs.tv_sec;
+                          nsec = lhs.tv_nsec - rhs.tv_nsec;
+                        }
+
+                        uint64_t nanoDiff = (sec * 1000000LL) + (nsec / 1000LL);
+                        for(int i=1;i<10;i++) {
+                          last10Times[i-1] = last10Times[i];
+			}
+                        printf("Elapsed: %lu microseconds\n", nanoDiff);
+#endif
+
 			memcpy(self->workPkts[ptr].rawResp, waitPkt, 16);
 			self->workPkts[ptr].respRcvd = 1;
 			self->workPkts[ptr].respValid = (crc == pcrc);
@@ -314,6 +348,9 @@ SQRLAXIResult _SQRLAXIDoTransaction(SQRLAXIRef self, uint8_t * reqPkt, uint8_t *
     self->workPkts[self->wPktWr].respRcvd = (respPkt == NULL)?true:false; // Causes work loop to clear the packet on response
     self->workPkts[self->wPktWr].respValid = 0;
     self->workPkts[self->wPktWr].respTimedOut = 0;
+#ifdef LATENCY_BENCHMARK
+    clock_gettime(0,&(self->workPkts[self->wPktWr].reqTime));
+#endif
     pktSlot = self->wPktWr;
     self->wPktWr++; // Auto-wrap
   }
@@ -353,7 +390,7 @@ SQRLAXIResult _SQRLAXIDoTransaction(SQRLAXIRef self, uint8_t * reqPkt, uint8_t *
       struct timespec timeout;
       timespec_get(&timeout, TIME_UTC);
       time_t sec = (timeout.tv_sec + (timeoutInMs/1000));
-      long nsec = (timeout.tv_nsec + ((long)timeoutInMs*1000000ULL));
+      long nsec = (timeout.tv_nsec + ((long)(timeoutInMs%1000)*1000000ULL));
     
       timeout.tv_sec = (sec + (nsec/1000000000ULL));
       timeout.tv_nsec = (nsec % 1000000000ULL); 
@@ -582,6 +619,9 @@ SQRLAXIResult SQRLAXIWriteBulk(SQRLAXIRef self, uint8_t * buf, uint32_t len, uin
   self->workPkts[self->wPktWr].respRcvd = (respPkt == NULL)?true:false; // Causes work loop to clear the packet on response
   self->workPkts[self->wPktWr].respValid = 0;
   self->workPkts[self->wPktWr].respTimedOut = 0;
+#ifdef LATENCY_BENCHMARK
+  clock_gettime(0, &(self->workPkts[self->wPktWr].reqTime));
+#endif
   pktSlot = self->wPktWr;
   self->wPktWr++; // Auto-wrap to 
 
