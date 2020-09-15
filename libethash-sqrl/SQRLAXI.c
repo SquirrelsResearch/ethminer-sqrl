@@ -71,8 +71,10 @@ typedef struct {
   bool respRcvd;
   bool respValid;
   bool respTimedOut;
+#ifndef _WIN32
   struct timespec reqTime;
   struct timespec respTime;
+#endif
 } SQRLAXIPkt;
 
 static uint64_t last10Times[10] = {0,0,0,0,0,0,0,0,0,0};
