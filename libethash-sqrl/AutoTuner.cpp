@@ -67,7 +67,7 @@ void AutoTuner::tune(uint64_t newTcks)
     if (_settings->autoTune >= 3)  // Stage 3: Tune N and P for given D.
     {
         if (tuneStage3(elapsedSeconds))
-            if (_settings->autoTune == 3)
+            if (_settings->autoTune == 3 || _settings->autoTune == 5)
                 tuningFinished = true;
     }
 
