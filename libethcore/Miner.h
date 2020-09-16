@@ -147,6 +147,7 @@ struct SQSettings : public MinerSettings
    string tuneFile = "tune.txt";
    unsigned tuneMaxCoreTemp = 85;
    unsigned tuneMaxHBMtemp = 80;
+   double tuneStabilityThreshold = 0.85; 
 };
 
 struct SolutionAccountType

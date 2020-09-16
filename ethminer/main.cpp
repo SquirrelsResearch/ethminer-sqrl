@@ -383,11 +383,12 @@ public:
     //Tune
     app.add_option("--auto-tune", m_SQSettings.autoTune, " 0 - no auto-tune, 1 - just reach max stable freq, 2 - downclock till low errror rate, 3 - tune intensity, 4- downclock voltage",true)->check(CLI::Range(0, 4));
     app.add_option("--tune-time", m_SQSettings.tuneTime, " Tuning time per test in seconds",true)->check(CLI::Range(10, 10000000));
-    app.add_option("--tune-max-clk", m_SQSettings.tuneMaxClk, " Tuning will not got higher than this clk, Mhz",true)->check(CLI::Range(300, 600));
+    app.add_option("--tune-max-clk", m_SQSettings.tuneMaxClk, " Tuning will not go higher than this clk, Mhz",true)->check(CLI::Range(300, 600));
     app.add_option("--tune-exclude", m_SQSettings.tuneExclude, "Devices to exclude, space seperated", true);
     app.add_option("--tune-file", m_SQSettings.tuneFile, "File in the same directory containing tune files");
     app.add_option("--tune-maxcore-temp", m_SQSettings.tuneMaxCoreTemp, "Max core temp, in C", true);
     app.add_option("--tune-maxhbm-temp", m_SQSettings.tuneMaxHBMtemp, "Max HBM temp, in C", true);
+    app.add_option("--tune-stable-threshold", m_SQSettings.tuneStabilityThreshold, "Percentage of expected hashrate below which downclocking will occur", true)->check(CLI::Range(0.0,1.0));
 
 #ifdef _WIN32
 	WSADATA wsaData;

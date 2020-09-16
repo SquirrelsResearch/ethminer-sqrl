@@ -43,10 +43,11 @@ void AutoTuner::tune(uint64_t newTcks)
 
     bool tuningFinished = false;
 
-    if (_settings->autoTune >= 1)  // Stage 1: Do a quick tune to get max frequency
+    if (_settings->autoTune >= 1 && _settings->autoTune <= 3)  // Stage 1: Do a quick tune to get max frequency
         tuneStage1(elapsedSeconds, currentStepIndex, it, mhs);
 
-    if (_settings->autoTune >= 2)  // Stage 2: Check for long term stability and error rate (removes
+    // Autotune 4 runs stage 2 and 3 only
+    if ((_settings->autoTune >= 2 && _settings->autoTune <= 3) || _settings->autoTune == 4)  // Stage 2: Check for long term stability and error rate (removes
                                    // marginally stable)
     {
         if (tuneStage2(currentStepIndex))
@@ -54,6 +55,15 @@ void AutoTuner::tune(uint64_t newTcks)
                 tuningFinished = true;
     }
 
+    if (_settings->autoTune >= 4)
+    {
+      _maxFreqReached = true;
+      if (_settings->autoTune >= 5) {
+        _stableFreqFound = true;  
+      }
+    }
+
+    // Autotune 5 runs only this stage
     if (_settings->autoTune >= 3)  // Stage 3: Tune N and P for given D.
     {
         if (tuneStage3(elapsedSeconds))
@@ -88,7 +98,7 @@ void AutoTuner::tuneStage1(
     uint64_t stage1_averageSeconds = 60;
     float throughput =
         (float)_settings->intensityN / (_settings->intensityN + _settings->intensityD);
-    float stabilityThreshold = ((_lastClock / 8) * throughput) * .9;
+    float stabilityThreshold = ((_lastClock / 8) * throughput) * _settings->tuneStabilityThreshold;
 
 
     if (elapsedSeconds > stage1_averageSeconds)
