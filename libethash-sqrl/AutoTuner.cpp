@@ -262,6 +262,9 @@ bool AutoTuner::tuneStage3(uint64_t elapsedSeconds)
                            _intensitySettings.intensityN =
                                (int)((_intensitySettings.intensityD * targetThroughput) /
                                      (-targetThroughput + 1)); 
+
+                           if (_intensitySettings.intensityN > 255)
+                               _intensitySettings.intensityN = 255; // capped at uint8_t
                        }
                        else
                        {
