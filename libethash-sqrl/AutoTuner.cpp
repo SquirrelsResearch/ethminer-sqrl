@@ -67,7 +67,7 @@ void AutoTuner::tune(uint64_t newTcks)
     if (_settings->autoTune >= 3)  // Stage 3: Tune N and P for given D.
     {
         if (tuneStage3(elapsedSeconds))
-            if (_settings->autoTune == 3 || _settings->autoTune == 5)
+            if (_settings->autoTune == 3 || _settings->autoTune == 5 || _settings->autoTune == 6)
                 tuningFinished = true;
     }
 
@@ -312,6 +312,13 @@ bool AutoTuner::tuneStage3(uint64_t elapsedSeconds)
                                     << (int)_secondPassUpperN;
                            _shareTimes.clear();  // clear for the second pass
                            _intensitySettings.intensityN = _secondPassLowerN;
+
+                           if (_settings->autoTune == 6)
+                           {
+                               _intensitySettings = _bestSettingsSoFar.first;
+                               _intensityTuneFinished = true;
+                               return true;
+                           }
                        }
                     }
                     else  // second - fine pass of N
