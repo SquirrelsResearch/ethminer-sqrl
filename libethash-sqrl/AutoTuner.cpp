@@ -180,7 +180,7 @@ bool AutoTuner::tuneStage2(unsigned currentStepIndex)
             else
             {
                 sqrllog << EthOrange << "S2: Stable long term frequency found at " << _lastClock
-                        << "MHz";
+                        << "MHz";              
                 _stableFreqFound = true;
                 return true;
             }
@@ -279,12 +279,16 @@ bool AutoTuner::tuneStage3(uint64_t elapsedSeconds)
                                averages[i] =
                                    (_shareTimes[i].second + _shareTimes[i + 1].second) / 2;
                            }
+                           _tuneLog <<endl<< "_shareTimes [3.0],";
                            for (unsigned i = 0; i < _shareTimes.size(); i++)
                            {
                                sqrllog << EthOrange << i << "," << _shareTimes[i].second;
+                               _tuneLog << "[" << _shareTimes[i].first.to_string() << ";"
+                                        << _shareTimes[i].second << "],";
                            }
                            // find best average to obtain the more fine tuning range
                            int bestAvgIndex = 0;
+                           _tuneLog << endl<<"Averages [3.0]," << averages[0] <<",";
                            for (unsigned i = 1; i < averages.size(); i++)
                            {
                                if (averages[i] > averages[bestAvgIndex])
@@ -292,6 +296,7 @@ bool AutoTuner::tuneStage3(uint64_t elapsedSeconds)
                                    bestAvgIndex = i;
                                }
                                sqrllog << EthOrange << "[" << i << "]avg=>" << averages[i];
+                               _tuneLog << averages[i] << ",";
                            }
                            _secondPassLowerN = _shareTimes[bestAvgIndex].first.intensityN;
                            _secondPassUpperN = _shareTimes[bestAvgIndex + 1].first.intensityN;
@@ -308,7 +313,8 @@ bool AutoTuner::tuneStage3(uint64_t elapsedSeconds)
                                       "range ["
                                    << (int)_secondPassLowerN << "-" << (int)_secondPassUpperN
                                    << "]";
-
+                           _tuneLog << endl<< "Tuning range [3.0]," << (int)_secondPassLowerN << ","
+                                    << (int)_secondPassLowerN;
                            _shareTimes.clear();  // clear for the second pass
                            _intensitySettings.intensityN = _secondPassLowerN;
                        }
@@ -324,6 +330,12 @@ bool AutoTuner::tuneStage3(uint64_t elapsedSeconds)
                             sqrllog << EthOrange << "S3.1: Best setting so far ->"
                                     << _bestSettingsSoFar.first.to_string()
                                     << " with hashrate=" << _bestSettingsSoFar.second;
+
+                            _tuneLog << endl << "_shareTimes [3.1],";
+                            for (unsigned i = 0; i < _shareTimes.size(); i++)
+                            {
+                                _tuneLog << "["<<_shareTimes[i].first.to_string()<<";"<< _shareTimes[i].second << "],";
+                            }
                             _bestIntensityRangeFound = true;
                             _shareTimes.clear();
                             _intensitySettings.patience++;
@@ -348,6 +360,9 @@ bool AutoTuner::tuneStage3(uint64_t elapsedSeconds)
                         }
                         else
                         {
+                            _tuneLog << endl
+                                     << "best [3.2], [" << _bestSettingsSoFar.first.to_string()
+                                     << ";" << _bestSettingsSoFar.second<<"]";
                             _intensitySettings = _bestSettingsSoFar.first;
                             _intensityTuneFinished = true;
                             return true;
@@ -440,15 +455,26 @@ bool AutoTuner::saveTune()
     {
         sqrllog << EthOrange << "Tune finished, saving tune.txt!";
         ofs << _minerInstance->getSettingsID() << "," << _lastClock << ","
-            << _bestSettingsSoFar.first.patience << ","
-            << _bestSettingsSoFar.first.intensityN << "," << _bestSettingsSoFar.first.intensityD
-            << endl;
+            << _bestSettingsSoFar.first.patience << "," << _bestSettingsSoFar.first.intensityN
+            << "," << _bestSettingsSoFar.first.intensityD << endl;
         ofs.close();
         return true;
     }
     else
     {
         sqrllog << EthRed << "Could not write tune file!";
+        return false;
+    }
+    ofs.open("tuneLog.txt", std::ios_base::app);  // append instead of overwrite
+    if (ofs.is_open())
+    {
+        ofs << _minerInstance->getSettingsID()<<endl<< _tuneLog.str() << endl;
+        ofs.close();
+        return true;
+    }
+    else
+    {
+        sqrllog << EthRed << "Could not write tune log!";
         return false;
     }
 }

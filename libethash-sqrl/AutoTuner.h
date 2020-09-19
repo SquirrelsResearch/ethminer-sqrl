@@ -62,6 +62,7 @@ class AutoTuner
     pair<IntensitySettings, double> _bestSettingsSoFar;
     vector<pair<IntensitySettings, double>> _shareTimes;  // how many target checks in set time
     
+    ostringstream _tuneLog;  
 
     void tuneStage1(uint64_t elapsedSeconds, unsigned currentStepIndex, vector<unsigned>::iterator it, float mhs);
     bool tuneStage2(unsigned currentStepIndex);
@@ -71,7 +72,7 @@ class AutoTuner
     bool saveTune();
     bool temperatureSafetyCheck(unsigned currentStepIndex);
     
-   
+     
 
 public:
     AutoTuner(SQRLMiner* minerInstance, TelemetryType* telemetry);
@@ -84,6 +85,8 @@ public:
     float getHardwareErrorRate();
     uint8_t getTuningStage() { return _tuningStage; }
     IntensitySettings getIntensitySettings() { return _intensitySettings; }
+
+    string getTuneLog() { return _tuneLog.str(); }
 };
 
 
