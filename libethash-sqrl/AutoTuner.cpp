@@ -481,6 +481,7 @@ bool AutoTuner::saveTune()
             return false;
         }
     }
+    return false;
 }
 bool AutoTuner::temperatureSafetyCheck(unsigned currentStepIndex)
 {
