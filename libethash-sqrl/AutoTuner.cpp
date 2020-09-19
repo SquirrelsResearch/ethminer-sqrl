@@ -348,11 +348,12 @@ bool AutoTuner::tuneStage3(uint64_t elapsedSeconds)
                             sqrllog << EthOrange << "S3.2: Best setting so far ->"
                                     << _bestSettingsSoFar.first.to_string()
                                     << " with hashrate=" << _bestSettingsSoFar.second;
-                            
+                            writeShareTimesToLog("3.2");
                             _shareTimes.clear();                           
                         }
                         else
                         {
+                            writeShareTimesToLog("3.2");
                             _tuneLog << endl
                                      << "best [3.2], [" << _bestSettingsSoFar.first.to_string()
                                      << ";" << _bestSettingsSoFar.second<<"]";
@@ -360,7 +361,7 @@ bool AutoTuner::tuneStage3(uint64_t elapsedSeconds)
                             _intensityTuneFinished = true;
                             return true;
                         }
-                        writeShareTimesToLog("3.2");
+                       
                     }
                 }
                 sqrllog << EthBlueBold << "Average hashrate during tuning period="
