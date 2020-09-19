@@ -451,6 +451,7 @@ bool AutoTuner::saveTune()
 {
     ofstream ofs;
     ofs.open("tune.txt", std::ios_base::app);  // append instead of overwrite
+    bool isOK = false;
     if (ofs.is_open())
     {
         sqrllog << EthOrange << "Tune finished, saving tune.txt!";
@@ -458,24 +459,27 @@ bool AutoTuner::saveTune()
             << _bestSettingsSoFar.first.patience << "," << _bestSettingsSoFar.first.intensityN
             << "," << _bestSettingsSoFar.first.intensityD << endl;
         ofs.close();
-        return true;
+        isOK = true;
     }
     else
     {
         sqrllog << EthRed << "Could not write tune file!";
-        return false;
+        isOK = false;
     }
-    ofs.open("tuneLog.txt", std::ios_base::app);  // append instead of overwrite
-    if (ofs.is_open())
+    if (isOK)
     {
-        ofs << _minerInstance->getSettingsID()<<endl<< _tuneLog.str() << endl;
-        ofs.close();
-        return true;
-    }
-    else
-    {
-        sqrllog << EthRed << "Could not write tune log!";
-        return false;
+        ofs.open("tuneLog.txt", std::ios_base::app);  // append instead of overwrite
+        if (ofs.is_open())
+        {
+            ofs << _minerInstance->getSettingsID() << endl << _tuneLog.str() << endl;
+            ofs.close();
+            return true;
+        }
+        else
+        {
+            sqrllog << EthRed << "Could not write tune log!";
+            return false;
+        }
     }
 }
 bool AutoTuner::temperatureSafetyCheck(unsigned currentStepIndex)
