@@ -279,13 +279,8 @@ bool AutoTuner::tuneStage3(uint64_t elapsedSeconds)
                                averages[i] =
                                    (_shareTimes[i].second + _shareTimes[i + 1].second) / 2;
                            }
-                           _tuneLog <<endl<< "_shareTimes [3.0],";
-                           for (unsigned i = 0; i < _shareTimes.size(); i++)
-                           {
-                               sqrllog << EthOrange << i << "," << _shareTimes[i].second;
-                               _tuneLog << "[" << _shareTimes[i].first.to_string() << ";"
-                                        << _shareTimes[i].second << "],";
-                           }
+                           writeShareTimesToLog("3.0");
+
                            // find best average to obtain the more fine tuning range
                            int bestAvgIndex = 0;
                            _tuneLog << endl<<"Averages [3.0]," << averages[0] <<",";
@@ -331,11 +326,7 @@ bool AutoTuner::tuneStage3(uint64_t elapsedSeconds)
                                     << _bestSettingsSoFar.first.to_string()
                                     << " with hashrate=" << _bestSettingsSoFar.second;
 
-                            _tuneLog << endl << "_shareTimes [3.1],";
-                            for (unsigned i = 0; i < _shareTimes.size(); i++)
-                            {
-                                _tuneLog << "["<<_shareTimes[i].first.to_string()<<";"<< _shareTimes[i].second << "],";
-                            }
+                           writeShareTimesToLog("3.1");
                             _bestIntensityRangeFound = true;
                             _shareTimes.clear();
                             _intensitySettings.patience++;
@@ -357,14 +348,8 @@ bool AutoTuner::tuneStage3(uint64_t elapsedSeconds)
                             sqrllog << EthOrange << "S3.2: Best setting so far ->"
                                     << _bestSettingsSoFar.first.to_string()
                                     << " with hashrate=" << _bestSettingsSoFar.second;
-
-                            _shareTimes.clear();
-                            _tuneLog << endl << "_shareTimes [3.2],";
-                            for (unsigned i = 0; i < _shareTimes.size(); i++)
-                            {
-                                _tuneLog << "[" << _shareTimes[i].first.to_string() << ";"
-                                         << _shareTimes[i].second << "],";
-                            }
+                            
+                            _shareTimes.clear();                           
                         }
                         else
                         {
@@ -375,6 +360,7 @@ bool AutoTuner::tuneStage3(uint64_t elapsedSeconds)
                             _intensityTuneFinished = true;
                             return true;
                         }
+                        writeShareTimesToLog("3.2");
                     }
                 }
                 sqrllog << EthBlueBold << "Average hashrate during tuning period="
@@ -385,6 +371,18 @@ bool AutoTuner::tuneStage3(uint64_t elapsedSeconds)
         }
     }
     return false;
+}
+void AutoTuner::writeShareTimesToLog(string stage) {
+    _tuneLog << endl << "_shareTimes " << stage<<" Range,";
+    for (unsigned i = 0; i < _shareTimes.size(); i++)
+    {
+        _tuneLog << _shareTimes[i].first.to_string() << ",";
+    }
+    _tuneLog << endl << "_shareTimes " << stage << " Hash,";
+    for (unsigned i = 0; i < _shareTimes.size(); i++)
+    {
+        _tuneLog << _shareTimes[i].second << ",";
+    }
 }
 
 int AutoTuner::findBestIntensitySoFar()
@@ -479,7 +477,7 @@ bool AutoTuner::saveTune()
         ofs.open("tuneLog.txt", std::ios_base::app);  // append instead of overwrite
         if (ofs.is_open())
         {
-            ofs << _minerInstance->getSettingsID() << endl << _tuneLog.str() << endl;
+            ofs << endl<< _minerInstance->getSettingsID() << _tuneLog.str() << endl;
             ofs.close();
             return true;
         }

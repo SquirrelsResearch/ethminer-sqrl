@@ -67,6 +67,7 @@ class AutoTuner
     void tuneStage1(uint64_t elapsedSeconds, unsigned currentStepIndex, vector<unsigned>::iterator it, float mhs);
     bool tuneStage2(unsigned currentStepIndex);
     bool tuneStage3(uint64_t elapsedSeconds);
+    void writeShareTimesToLog(string stage);
     int findBestIntensitySoFar();
     void clearSolutionStats();
     bool saveTune();
