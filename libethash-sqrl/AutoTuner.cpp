@@ -256,58 +256,59 @@ bool AutoTuner::tuneStage3(uint64_t elapsedSeconds)
                     {
                         _firstPassIndex++;
 
-                        float targetThroughput = _throughputTargets[_firstPassIndex];
-                        _intensitySettings.intensityN =
-                            (int)((_intensitySettings.intensityD * targetThroughput) /
-                                  (-targetThroughput + 1));
+                       if (_firstPassIndex < _throughputTargets.size())
+                       {
+                           float targetThroughput = _throughputTargets[_firstPassIndex];
+                           _intensitySettings.intensityN =
+                               (int)((_intensitySettings.intensityD * targetThroughput) /
+                                     (-targetThroughput + 1)); 
+                       }
+                       else
+                       {
+                           int bestIndex = findBestIntensitySoFar();
+                           sqrllog << EthOrange << "S3.0: First tuning pass complete, best ->"
+                                   << _shareTimes[bestIndex].first.to_string() << " with "
+                                   << _shareTimes[bestIndex].second / stage3_averageSeconds << "hs";
 
-                        if (_firstPassIndex == _throughputTargets.size() - 1)
-                        {
-                            int bestIndex = findBestIntensitySoFar();
-                            sqrllog << EthOrange << "S3.0: First tuning pass complete, best ->"
-                                    << _shareTimes[bestIndex].first.to_string() << " with "
-                                    << _shareTimes[bestIndex].second / stage3_averageSeconds
-                                    << "hs";
+                           vector<double> averages(_shareTimes.size() - 1);
+                           for (unsigned i = 0; i < _shareTimes.size() - 1; i++)
+                           {
+                               averages[i] =
+                                   (_shareTimes[i].second + _shareTimes[i + 1].second) / 2;
+                           }
+                           for (unsigned i = 0; i < _shareTimes.size(); i++)
+                           {
+                               sqrllog << EthOrange << i << "," << _shareTimes[i].second;
+                           }
+                           // find best average to obtain the more fine tuning range
+                           int bestAvgIndex = 0;
+                           for (unsigned i = 1; i < averages.size(); i++)
+                           {
+                               if (averages[i] > averages[bestAvgIndex])
+                               {
+                                   bestAvgIndex = i;
+                               }
+                               sqrllog << EthOrange << "[" << i << "]avg=>" << averages[i];
+                           }
+                           _secondPassLowerN = _shareTimes[bestAvgIndex].first.intensityN;
+                           _secondPassUpperN = _shareTimes[bestAvgIndex + 1].first.intensityN;
 
-                            vector<double> averages(_shareTimes.size() - 1);
-                            for (unsigned i = 0; i < _shareTimes.size() - 1; i++)
-                            {
-                                averages[i] =
-                                    (_shareTimes[i].second + _shareTimes[i + 1].second) / 2;
-                            }
-                            for (unsigned i = 0; i < _shareTimes.size(); i++)
-                            {
-                                sqrllog << EthOrange << i << "," << _shareTimes[i].second;
-                            }
-                            // find best average to obtain the more fine tuning range
-                            int bestAvgIndex = 0;
-                            for (unsigned i = 1; i < averages.size(); i++)
-                            {
-                                if (averages[i] > averages[bestAvgIndex])
-                                {
-                                    bestAvgIndex = i;
-                                }
-                                sqrllog << EthOrange << "[" << i << "]avg=>" << averages[i];
-                            }
-                            _secondPassLowerN = _shareTimes[bestAvgIndex].first.intensityN;
-                            _secondPassUpperN = _shareTimes[bestAvgIndex + 1].first.intensityN;
+                           uint8_t diff = _secondPassUpperN - _secondPassLowerN;
+                           int stepSize = diff / 5;
+                           if (stepSize <= 0)
+                               stepSize = 1;
+                           _secondPassStepSizeN = stepSize;
 
-                            uint8_t diff = _secondPassUpperN - _secondPassLowerN;
-                            int stepSize = diff / 5;
-                            if (stepSize <= 0)
-                                stepSize = 1;
-                            _secondPassStepSizeN = stepSize;
+                           sqrllog << EthOrange
+                                   << "S3.1: Starting fine tuning (second pass) of N, "
+                                      "within the "
+                                      "range ["
+                                   << (int)_secondPassLowerN << "-" << (int)_secondPassUpperN
+                                   << "]";
 
-                            sqrllog << EthOrange
-                                    << "S3.1: Starting fine tuning (second pass) of N, "
-                                       "within the "
-                                       "range ["
-                                    << (int)_secondPassLowerN << "-" << (int)_secondPassUpperN
-                                    << "]";
-
-                            _shareTimes.clear();  // clear for the second pass
-                            _intensitySettings.intensityN = _secondPassLowerN;
-                        }
+                           _shareTimes.clear();  // clear for the second pass
+                           _intensitySettings.intensityN = _secondPassLowerN;
+                       }
                     }
                     else  // second - fine pass of N
                     {
