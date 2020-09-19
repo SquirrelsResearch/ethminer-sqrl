@@ -314,7 +314,7 @@ bool AutoTuner::tuneStage3(uint64_t elapsedSeconds)
                                    << (int)_secondPassLowerN << "-" << (int)_secondPassUpperN
                                    << "]";
                            _tuneLog << endl<< "Tuning range [3.0]," << (int)_secondPassLowerN << ","
-                                    << (int)_secondPassLowerN;
+                                    << (int)_secondPassUpperN;
                            _shareTimes.clear();  // clear for the second pass
                            _intensitySettings.intensityN = _secondPassLowerN;
                        }
@@ -357,6 +357,14 @@ bool AutoTuner::tuneStage3(uint64_t elapsedSeconds)
                             sqrllog << EthOrange << "S3.2: Best setting so far ->"
                                     << _bestSettingsSoFar.first.to_string()
                                     << " with hashrate=" << _bestSettingsSoFar.second;
+
+                            _shareTimes.clear();
+                            _tuneLog << endl << "_shareTimes [3.2],";
+                            for (unsigned i = 0; i < _shareTimes.size(); i++)
+                            {
+                                _tuneLog << "[" << _shareTimes[i].first.to_string() << ";"
+                                         << _shareTimes[i].second << "],";
+                            }
                         }
                         else
                         {
