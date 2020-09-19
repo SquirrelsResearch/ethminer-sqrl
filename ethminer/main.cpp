@@ -381,7 +381,7 @@ public:
 	app.add_option("--sqrl-axi-timeout", m_SQSettings.axiTimeoutMs, "AXI maximum latency in milliseconds", true);
 
     //Tune
-    app.add_option("--auto-tune", m_SQSettings.autoTune, " 0 - no auto-tune, 1 - just reach max stable freq, 2 - downclock till low errror rate, 3 - tune intensity, 4- downclock voltage",true)->check(CLI::Range(0, 5));
+    app.add_option("--auto-tune", m_SQSettings.autoTune, " 0 - no auto-tune, 1 - just reach max stable freq, 2 - downclock till low errror rate, 3 - tune intensity",true)->check(CLI::Range(0, 6));
     app.add_option("--tune-time", m_SQSettings.tuneTime, " Tuning time per test in seconds",true)->check(CLI::Range(10, 10000000));
     app.add_option("--tune-max-clk", m_SQSettings.tuneMaxClk, " Tuning will not go higher than this clk, Mhz",true)->check(CLI::Range(300, 600));
     app.add_option("--tune-exclude", m_SQSettings.tuneExclude, "Devices to exclude, space seperated", true);
