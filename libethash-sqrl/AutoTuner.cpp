@@ -349,6 +349,7 @@ bool AutoTuner::tuneStage3(uint64_t elapsedSeconds)
                                     << _bestSettingsSoFar.first.to_string()
                                     << " with hashrate=" << _bestSettingsSoFar.second;
                             writeShareTimesToLog("3.2");
+                            _intensitySettings.intensityN = _secondPassLowerN;
                             _shareTimes.clear();                           
                         }
                         else
