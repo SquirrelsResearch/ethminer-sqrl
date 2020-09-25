@@ -387,7 +387,7 @@ SQRLAXIResult _SQRLAXIDoTransaction(SQRLAXIRef self, uint8_t * reqPkt, uint8_t *
       bool timedOut = false;
 #ifdef _WIN32
       BOOL res = SleepConditionVariableCS(&self->wCond, &self->wMutex, timeoutInMs);
-      timedOut = (res?true:false);
+      timedOut = (res?false:true);
 #else
       struct timespec timeout;
       timespec_get(&timeout, TIME_UTC);

@@ -82,7 +82,6 @@ private:
     atomic<bool> m_dagging = {false};
    
     SQRLAXIRef m_axi = NULL;
-    std::mutex axiMutex;
     SQSettings m_settings;
     AutoTuner* m_tuner;
 

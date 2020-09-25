@@ -492,7 +492,6 @@ bool SQRLMiner::initEpoch_internal()
     // Always drop to stock clock immediately on start, before we stop or change cores
     setClock(-2);
 
-    axiMutex.lock();
     sqrllog << "Changing to Epoch " << m_epochContext.epochNumber; 
     // Stop the mining core if it is active, and stop DAGGEN if active
     StopHashcore(true, 0);
@@ -528,7 +527,6 @@ bool SQRLMiner::initEpoch_internal()
 	// Power off DAGGEN
 	SQRLAXIWrite(m_axi, 0x0, 0xB000, true);
 	m_dagging = false;
-	axiMutex.unlock();
 	setClock(m_lastClk);
 
     m_tuner->startTune(m_lastClk);
@@ -569,13 +567,11 @@ bool SQRLMiner::initEpoch_internal()
       SQRLAXIWrite(m_axi, 0x1, 0x40BC, true);
       uint32_t cstatus = 0;
       while ((cstatus&2) != 0x2) {
-	axiMutex.unlock();
 #ifdef _WIN32
         Sleep(100);
 #else
         usleep(100000);
 #endif
-	axiMutex.lock();
         err = SQRLAXIRead(m_axi, &cstatus, 0x40BC);
         if((err != 0) && m_settings.dieOnError) {
           exit(1);
@@ -613,7 +609,6 @@ bool SQRLMiner::initEpoch_internal()
       }
       if (uploadFailed) {
         m_dagging = false;
-	axiMutex.unlock();
         return false;
       }
     }
@@ -649,13 +644,11 @@ bool SQRLMiner::initEpoch_internal()
     uint8_t cnt = 0;
     if (!m_settings.skipDAG) {
       while ((status&2) != 0x2) {
-        axiMutex.unlock();
 #ifdef _WIN32
         Sleep(1000);
 #else
         usleep(1000000);
 #endif
-        axiMutex.lock();
         err = SQRLAXIRead(m_axi, &status, 0x4000);
         if((err != 0) && m_settings.dieOnError) {
           exit(1);
@@ -715,8 +708,6 @@ bool SQRLMiner::initEpoch_internal()
       setClock(m_lastClk);
     }
 
-    axiMutex.unlock();
-
     m_tuner->startTune(m_lastClk);
 
     return true;
@@ -758,7 +749,6 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
     m_new_work.store(false, std::memory_order_relaxed);
 
     // Re-init parameters 
-    axiMutex.lock();
     uint8_t err = 0;
     // Bulk writes are blocking, we'll spend the bandwidth for lower latency
     //err = SQRLAXIWriteBulk(m_axi, (uint8_t *)w.header.data(), 32, 0x5000, 1); 
@@ -835,7 +825,6 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
             break;
 
 	//   auto r = ethash::search(context, header, boundary, nonce, blocksize);
-	axiMutex.unlock();
 
 	bool nonceValid = false;
 	uint64_t nonce = 0;
@@ -855,7 +844,6 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
             exit(1);
 	  }
   	}
-        axiMutex.lock();
 
         // Get stall check parameters
 	uint32_t sCnt;
@@ -922,7 +910,6 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
     }
     // Ensure core is in reset
     StopHashcore(true, flags);
-    axiMutex.unlock();
 
 }
 void SQRLMiner::processHashrateAverages(uint64_t newTcks)
@@ -1082,7 +1069,6 @@ void SQRLMiner::getTelemetry(unsigned int *tempC, unsigned int *fanprct, unsigne
   // ((double)raw * 3.0 / 65536.0);
 
   // Read general SYSMON temp 
-  axiMutex.lock();
   uint32_t raw;
   if (SQRLAXIResultOK == SQRLAXIRead(m_axi, &raw, 0x3400)) {
     (*tempC) = ((double)raw * 507.6 / 65536.0) - 279.43;
@@ -1100,7 +1086,6 @@ void SQRLMiner::getTelemetry(unsigned int *tempC, unsigned int *fanprct, unsigne
   // Force "calibrated" if comms fail (Avoid cascaded errors)
   raw = 0x3;
   SQRLAXIRead(m_axi, &raw, 0x7008);
-  axiMutex.unlock();
   // Left CAL, Right CL, Left CAT, Left 7 bit, Right CAT (Meow), Right 7bit 
   bool leftCalibrated = ((raw >> 0) & 1)?true:false;
   bool rightCalibrated = ((raw >> 1) & 1)?true:false;
