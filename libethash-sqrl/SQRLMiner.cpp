@@ -964,7 +964,10 @@ void SQRLMiner::processHashrateAverages(uint64_t newTcks)
 }
 double SQRLMiner::average(std::vector<double> const& v)
 {
-    return std::accumulate(v.begin(), v.end(), 0.0) / v.size();
+    if (v.size() > 0)
+        return std::accumulate(v.begin(), v.end(), 0.0) / v.size();
+
+    return 0;
 }
 
 double SQRLMiner::getClock() {
