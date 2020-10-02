@@ -718,8 +718,9 @@ SQRLAXIResult SQRLAXIWriteBulk(SQRLAXIRef self, uint8_t * buf, uint32_t len, uin
       if (timedOut) return SQRLAXIResultTimedOut;
       if (!valid) return SQRLAXIResultCRCFailed;
       break;
+    } else {
+      SQRLMutexUnlock(&self->wMutex);
     }
-    SQRLMutexUnlock(&self->wMutex);
     if(timeoutCount == 0) {
       printf("AXI Timeout!\n");
       SQRLMutexLock(&self->wMutex);
