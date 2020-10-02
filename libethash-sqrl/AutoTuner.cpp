@@ -67,7 +67,7 @@ void AutoTuner::tune(uint64_t newTcks)
     if (_settings->autoTune >= 3)  // Stage 3: Tune N and P for given D.
     {
         if (tuneStage3(elapsedSeconds))
-            if (_settings->autoTune == 3 || _settings->autoTune == 5)
+            if (_settings->autoTune == 3 || _settings->autoTune == 5 || _settings->autoTune == 6)
                 tuningFinished = true;
     }
 
@@ -180,7 +180,7 @@ bool AutoTuner::tuneStage2(unsigned currentStepIndex)
             else
             {
                 sqrllog << EthOrange << "S2: Stable long term frequency found at " << _lastClock
-                        << "MHz";
+                        << "MHz";              
                 _stableFreqFound = true;
                 return true;
             }
@@ -256,58 +256,70 @@ bool AutoTuner::tuneStage3(uint64_t elapsedSeconds)
                     {
                         _firstPassIndex++;
 
-                        float targetThroughput = _throughputTargets[_firstPassIndex];
-                        _intensitySettings.intensityN =
-                            (int)((_intensitySettings.intensityD * targetThroughput) /
-                                  (-targetThroughput + 1));
+                       if (_firstPassIndex < _throughputTargets.size())
+                       {
+                           float targetThroughput = _throughputTargets[_firstPassIndex];
+                           _intensitySettings.intensityN =
+                               (int)((_intensitySettings.intensityD * targetThroughput) /
+                                     (-targetThroughput + 1)); 
 
-                        if (_firstPassIndex == _throughputTargets.size() - 1)
-                        {
-                            int bestIndex = findBestIntensitySoFar();
-                            sqrllog << EthOrange << "S3.0: First tuning pass complete, best ->"
-                                    << _shareTimes[bestIndex].first.to_string() << " with "
-                                    << _shareTimes[bestIndex].second / stage3_averageSeconds
-                                    << "hs";
+                           if (_intensitySettings.intensityN > 255)
+                               _intensitySettings.intensityN = 255; // capped at uint8_t
+                       }
+                       else
+                       {
+                           int bestIndex = findBestIntensitySoFar();
+                           sqrllog << EthOrange << "S3.0: First tuning pass complete, best ->"
+                                   << _shareTimes[bestIndex].first.to_string() << " with "
+                                   << _shareTimes[bestIndex].second / stage3_averageSeconds << "hs";
 
-                            vector<double> averages(_shareTimes.size() - 1);
-                            for (unsigned i = 0; i < _shareTimes.size() - 1; i++)
-                            {
-                                averages[i] =
-                                    (_shareTimes[i].second + _shareTimes[i + 1].second) / 2;
-                            }
-                            for (unsigned i = 0; i < _shareTimes.size(); i++)
-                            {
-                                sqrllog << EthOrange << i << "," << _shareTimes[i].second;
-                            }
-                            // find best average to obtain the more fine tuning range
-                            int bestAvgIndex = 0;
-                            for (unsigned i = 1; i < averages.size(); i++)
-                            {
-                                if (averages[i] > averages[bestAvgIndex])
-                                {
-                                    bestAvgIndex = i;
-                                }
-                                sqrllog << EthOrange << "[" << i << "]avg=>" << averages[i];
-                            }
-                            _secondPassLowerN = _shareTimes[bestAvgIndex].first.intensityN;
-                            _secondPassUpperN = _shareTimes[bestAvgIndex + 1].first.intensityN;
+                           vector<double> averages(_shareTimes.size() - 1);
+                           for (unsigned i = 0; i < _shareTimes.size() - 1; i++)
+                           {
+                               averages[i] =
+                                   (_shareTimes[i].second + _shareTimes[i + 1].second) / 2;
+                           }
+                           writeShareTimesToLog("3.0");
 
-                            uint8_t diff = _secondPassUpperN - _secondPassLowerN;
-                            int stepSize = diff / 5;
-                            if (stepSize <= 0)
-                                stepSize = 1;
-                            _secondPassStepSizeN = stepSize;
+                           // find best average to obtain the more fine tuning range
+                           int bestAvgIndex = 0;
+                           _tuneLog << endl<<"Averages [3.0]," << averages[0] <<",";
+                           for (unsigned i = 1; i < averages.size(); i++)
+                           {
+                               if (averages[i] > averages[bestAvgIndex])
+                               {
+                                   bestAvgIndex = i;
+                               }
+                               sqrllog << EthOrange << "[" << i << "]avg=>" << averages[i];
+                               _tuneLog << averages[i] << ",";
+                           }
+                           _secondPassLowerN = _shareTimes[bestAvgIndex].first.intensityN;
+                           _secondPassUpperN = _shareTimes[bestAvgIndex + 1].first.intensityN;
 
-                            sqrllog << EthOrange
-                                    << "S3.1: Starting fine tuning (second pass) of N, "
-                                       "within the "
-                                       "range ["
-                                    << (int)_secondPassLowerN << "-" << (int)_secondPassUpperN
-                                    << "]";
+                           uint8_t diff = _secondPassUpperN - _secondPassLowerN;
+                           int stepSize = diff / 5;
+                           if (stepSize <= 0)
+                               stepSize = 1;
+                           _secondPassStepSizeN = stepSize;
 
-                            _shareTimes.clear();  // clear for the second pass
-                            _intensitySettings.intensityN = _secondPassLowerN;
-                        }
+                           sqrllog << EthOrange
+                                   << "S3.1: Starting fine tuning (second pass) of N, "
+                                      "within the "
+                                      "range ["
+                                   << (int)_secondPassLowerN << "-" << (int)_secondPassUpperN
+                                   << "]";
+                           _tuneLog << endl<< "Tuning range [3.0]," << (int)_secondPassLowerN << ","
+                                    << (int)_secondPassUpperN;
+                           _shareTimes.clear();  // clear for the second pass
+                           _intensitySettings.intensityN = _secondPassLowerN;
+
+                           if (_settings->autoTune == 6)
+                           {
+                               _intensitySettings = _bestSettingsSoFar.first;
+                               _intensityTuneFinished = true;
+                               return true;
+                           }
+                       }
                     }
                     else  // second - fine pass of N
                     {
@@ -320,6 +332,8 @@ bool AutoTuner::tuneStage3(uint64_t elapsedSeconds)
                             sqrllog << EthOrange << "S3.1: Best setting so far ->"
                                     << _bestSettingsSoFar.first.to_string()
                                     << " with hashrate=" << _bestSettingsSoFar.second;
+
+                           writeShareTimesToLog("3.1");
                             _bestIntensityRangeFound = true;
                             _shareTimes.clear();
                             _intensitySettings.patience++;
@@ -341,13 +355,21 @@ bool AutoTuner::tuneStage3(uint64_t elapsedSeconds)
                             sqrllog << EthOrange << "S3.2: Best setting so far ->"
                                     << _bestSettingsSoFar.first.to_string()
                                     << " with hashrate=" << _bestSettingsSoFar.second;
+                            writeShareTimesToLog("3.2");
+                            _intensitySettings.intensityN = _secondPassLowerN;
+                            _shareTimes.clear();                           
                         }
                         else
                         {
+                            writeShareTimesToLog("3.2");
+                            _tuneLog << endl
+                                     << "best [3.2], [" << _bestSettingsSoFar.first.to_string()
+                                     << ";" << _bestSettingsSoFar.second<<"]";
                             _intensitySettings = _bestSettingsSoFar.first;
                             _intensityTuneFinished = true;
                             return true;
                         }
+                       
                     }
                 }
                 sqrllog << EthBlueBold << "Average hashrate during tuning period="
@@ -358,6 +380,18 @@ bool AutoTuner::tuneStage3(uint64_t elapsedSeconds)
         }
     }
     return false;
+}
+void AutoTuner::writeShareTimesToLog(string stage) {
+    _tuneLog << endl << "_shareTimes " << stage<<" Range,";
+    for (unsigned i = 0; i < _shareTimes.size(); i++)
+    {
+        _tuneLog << _shareTimes[i].first.to_string() << ",";
+    }
+    _tuneLog << endl << "_shareTimes " << stage << " Hash,";
+    for (unsigned i = 0; i < _shareTimes.size(); i++)
+    {
+        _tuneLog << _shareTimes[i].second << ",";
+    }
 }
 
 int AutoTuner::findBestIntensitySoFar()
@@ -432,21 +466,37 @@ bool AutoTuner::saveTune()
 {
     ofstream ofs;
     ofs.open("tune.txt", std::ios_base::app);  // append instead of overwrite
+    bool isOK = false;
     if (ofs.is_open())
     {
         sqrllog << EthOrange << "Tune finished, saving tune.txt!";
         ofs << _minerInstance->getSettingsID() << "," << _lastClock << ","
-            << _bestSettingsSoFar.first.patience << ","
-            << _bestSettingsSoFar.first.intensityN << "," << _bestSettingsSoFar.first.intensityD
-            << endl;
+            << _bestSettingsSoFar.first.patience << "," << _bestSettingsSoFar.first.intensityN
+            << "," << _bestSettingsSoFar.first.intensityD << endl;
         ofs.close();
-        return true;
+        isOK = true;
     }
     else
     {
         sqrllog << EthRed << "Could not write tune file!";
-        return false;
+        isOK = false;
     }
+    if (isOK)
+    {
+        ofs.open("tuneLog.txt", std::ios_base::app);  // append instead of overwrite
+        if (ofs.is_open())
+        {
+            ofs << endl<< _minerInstance->getSettingsID() << _tuneLog.str() << endl;
+            ofs.close();
+            return true;
+        }
+        else
+        {
+            sqrllog << EthRed << "Could not write tune log!";
+            return false;
+        }
+    }
+    return false;
 }
 bool AutoTuner::temperatureSafetyCheck(unsigned currentStepIndex)
 {

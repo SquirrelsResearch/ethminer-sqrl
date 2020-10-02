@@ -985,7 +985,10 @@ void SQRLMiner::processHashrateAverages(uint64_t newTcks)
 }
 double SQRLMiner::average(std::vector<double> const& v)
 {
-    return std::accumulate(v.begin(), v.end(), 0.0) / v.size();
+    if (v.size() > 0)
+        return std::accumulate(v.begin(), v.end(), 0.0) / v.size();
+
+    return 0;
 }
 
 double SQRLMiner::getClock() {
@@ -1271,8 +1274,11 @@ void SQRLMiner::enumDevices(std::map<string, DeviceDescriptor>& _DevicesCollecti
         string uniqueId;
         ostringstream s;
         DeviceDescriptor deviceDescriptor;
+        if (i < 10)
+            s << "sqrl-0" << i;
+        else
+            s << "sqrl-" << i;
 
-        s << "sqrl-" << i;
         uniqueId = s.str();
         if (_DevicesCollection.find(uniqueId) != _DevicesCollection.end())
             deviceDescriptor = _DevicesCollection[uniqueId];
