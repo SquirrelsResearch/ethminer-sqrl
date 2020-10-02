@@ -680,25 +680,46 @@ bool SQRLMiner::initEpoch_internal()
 
     sqrllog << "Duplicating DAG Items for performance...";
     auto startSwizzle = std::chrono::steady_clock::now(); 
-    for(uint64_t i=0; i < 256; i++) {
-      uint64_t src = 0x100000000ULL | (i << 24);
-      uint64_t dst = 0x0ULL | (((i&0x0f) << 4) | ((i&0xF0) >> 4)) << 24;
-      //printf("Swizzling chunk from %016lx to %016lx\n", src, dst);
-      err = SQRLAXICDMACopyBytes(m_axi, src, dst, 0x1000000ULL);
+    uint32_t ver = 0;
+    err = SQRLAXIRead(m_axi, &ver, 0x8);
+    if (err != 0) {
+      sqrllog << "Error checking DAGGEN Version";
+    } 
+    if ( (ver & 0xff ) >= 0x9) {
+      for(uint64_t i=0; i < 16; i++) {
+        uint64_t src = 0x100000000ULL | (i << 24);
+        uint64_t dst = 0x0ULL | (i << 24);
+        //printf("Copying chunk from %016lx to %016lx\n", src, dst);
+        err = SQRLAXICDMACopyBytes(m_axi, src, dst, 0x1000000ULL);
 
-      if (err != 0) {
-        sqrllog << "Failed to swizzle DAG!";
-        break;
-      } else {
-        //printf("Swizzled DAG successfully!\n");
+        if (err != 0) {
+          sqrllog << "Failed to copy DAG!";
+          break;
+        } else {
+          //printf("Copied DAG successfully!\n");
+        }
       }
-    }
-    if (err == 0) {
-      //printf("Copying Swizzled DAG back to stack 1...\n");
-      err = SQRLAXICDMACopyBytes(m_axi, 0x0ULL, 0x100000000ULL, 4ULL*1024ULL*1024ULL*1024ULL);
-      if (err != 0) {
-        sqrllog << "Failed to copy DAG!";
-      } 
+    } else {
+      for(uint64_t i=0; i < 256; i++) {
+        uint64_t src = 0x100000000ULL | (i << 24);
+        uint64_t dst = 0x0ULL | (((i&0x0f) << 4) | ((i&0xF0) >> 4)) << 24;
+        //printf("Swizzling chunk from %016lx to %016lx\n", src, dst);
+        err = SQRLAXICDMACopyBytes(m_axi, src, dst, 0x1000000ULL);
+
+        if (err != 0) {
+          sqrllog << "Failed to swizzle DAG!";
+          break;
+        } else {
+          //printf("Swizzled DAG successfully!\n");
+        }
+      }
+      if (err == 0) {
+        //printf("Copying Swizzled DAG back to stack 1...\n");
+        err = SQRLAXICDMACopyBytes(m_axi, 0x0ULL, 0x100000000ULL, 4ULL*1024ULL*1024ULL*1024ULL);
+        if (err != 0) {
+          sqrllog << "Failed to copy DAG!";
+        } 
+      }
     }
     auto swizzleTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startSwizzle);
     sqrllog << "DAG Duplication took " << swizzleTime.count() << " ms.";

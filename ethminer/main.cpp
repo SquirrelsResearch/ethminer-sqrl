@@ -173,7 +173,10 @@ public:
         default:
             cnote << "Got interrupt ...";
             g_running = false;
-            g_shouldstop.notify_all();
+	    {
+              //lock_guard<mutex> lk(m_climtx);
+              g_shouldstop.notify_all();
+	    }
 	    intCnt++;
 	    if (intCnt == 3) exit(1);
             break;
@@ -1337,6 +1340,7 @@ private:
         unique_lock<mutex> clilock(m_climtx);
         while (g_running)
             g_shouldstop.wait(clilock);
+        clilock.unlock();
 
 #if API_CORE
 
