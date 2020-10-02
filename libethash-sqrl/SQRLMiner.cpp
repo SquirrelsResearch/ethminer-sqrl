@@ -1274,8 +1274,11 @@ void SQRLMiner::enumDevices(std::map<string, DeviceDescriptor>& _DevicesCollecti
         string uniqueId;
         ostringstream s;
         DeviceDescriptor deviceDescriptor;
+        if (i < 10)
+            s << "sqrl-0" << i;
+        else
+            s << "sqrl-" << i;
 
-        s << "sqrl-" << i;
         uniqueId = s.str();
         if (_DevicesCollection.find(uniqueId) != _DevicesCollection.end())
             deviceDescriptor = _DevicesCollection[uniqueId];
