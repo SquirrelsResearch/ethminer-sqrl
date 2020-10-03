@@ -162,7 +162,7 @@ bool AutoTuner::tuneStage2(unsigned currentStepIndex)
         // calculate error rate
         auto solutions = _telemetry->miners.at(_minerIndex).solutions;
 
-        if (solutions.low > 0 && (solutions.low + solutions.failed) % tuningShareCount == 0)
+        if (solutions.low > 0 && (solutions.low + solutions.failed) / tuningShareCount > 0)
         {
             float errorRate = getHardwareErrorRate();
 
