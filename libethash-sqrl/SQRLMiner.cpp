@@ -927,7 +927,14 @@ void SQRLMiner::search(const dev::eth::WorkPackage& w)
         processHashrateAverages(newTChks);
 
 
-	if (shouldReset) break; // Let core reset
+	if (shouldReset) {
+	  sqrllog << EthRed << "Stall detected, resetting..."; 
+          StopHashcore(true, flags);
+	  flags = 0;
+          setClock(-2);
+	  setClock(m_lastClk); 
+          break; // Let core reset
+        }
     }
     // Ensure core is in reset
     StopHashcore(true, flags);
