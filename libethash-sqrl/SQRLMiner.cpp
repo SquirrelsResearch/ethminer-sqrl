@@ -679,6 +679,7 @@ bool SQRLMiner::initEpoch_internal()
       sqrllog << "Error checking DAGGEN Version";
     } 
     if ( (ver & 0xff ) >= 0x9) {
+      if ( (ver & 0xff ) == 0x9) {
       for(uint64_t i=0; i < 16; i++) {
         uint64_t src = 0x100000000ULL | (i << 24);
         uint64_t dst = 0x0ULL | (i << 24);
@@ -691,6 +692,15 @@ bool SQRLMiner::initEpoch_internal()
         } else {
           //printf("Copied DAG successfully!\n");
         }
+      }
+      } else {
+	sqrllog << "Utilizing dual-stack DAG leveling";
+        // 0x0a and up support full-chip DAG up to ~ 7.1GB, with persistent light cache storage
+	// and as such do not duplicate the DAG across stacks (instead cross-stack striping is 
+	// used for address translation with the mapping function of
+	// {dagItemIndex[20:16], dagItemIndex[25:21], dagItemIndex[15:0]} << 6)
+	// Light-cache mapping grows downward from top of first 4 pseudochannels
+	// {2'b0, cacheIdx[20:19], 28'hFFFFC0 - cacheIdx[18:0]};
       }
     } else {
       for(uint64_t i=0; i < 256; i++) {
