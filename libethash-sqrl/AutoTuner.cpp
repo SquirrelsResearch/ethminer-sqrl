@@ -514,7 +514,7 @@ bool AutoTuner::temperatureSafetyCheck(unsigned currentStepIndex)
             sqrllog << EthRed << "FPGA appears to have crashed!";
             return false;
         }
-        uint8_t* FPGAtemps = _minerInstance->getFPGAtemps();
+        int* FPGAtemps = _minerInstance->getFPGAtemps();
         int tempCore = FPGAtemps[0];
         int tempLeft = FPGAtemps[1];
         int tempRight = FPGAtemps[2];
