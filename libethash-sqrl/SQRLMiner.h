@@ -62,7 +62,7 @@ public:
     double getClock();
     double setClock(double targetClk);
     string getSettingsID() { return m_settingID; }
-    uint8_t* getFPGAtemps() { return m_FPGAtemps; }
+    int* getFPGAtemps() { return m_FPGAtemps; }
     void setLastClock(double lastClk) { m_lastClk = lastClk; }
 
 protected:
@@ -103,7 +103,7 @@ private:
     double m_avgValues[4]; //1min avg hash, 10min avg hash, 60min avg hash, error rate
     vector<double> m_10minHashAvg;
     vector<double> m_60minHashAvg;
-    uint8_t m_FPGAtemps[3];//core,HBM-left,HBM-right;
+    int m_FPGAtemps[3];//core,HBM-left,HBM-right;
    
     double average(std::vector<double> const& v);
     atomic<std::chrono::steady_clock::time_point> m_avgHashTimer = {
